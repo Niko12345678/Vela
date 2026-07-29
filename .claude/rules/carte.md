@@ -22,7 +22,12 @@ Non modificare `src/data/*.json` a mano.
 Per aggiungere un'area di navigazione: copia lo YAML, cambia riquadro e
 porti, rilancia.
 
-Attenzione: la carta generata **non è ancora collegata al gioco**, che
-legge il letterale `IONIO` incorporato in `game.js`. Prima di toccare quel
-collegamento leggi `docs/refactoring.md`: sposta il punto di partenza e
-quindi tocca la golden test.
+Il gioco legge questo JSON, ma non lo importa da sé: `game.js` non può
+avere `import` propri (la harness lo esegue in una `new Function`), quindi
+la carta gliela mette su `globalThis` l'host — `src/data/carte.js` nel
+browser, la harness nei test. Chi carica `game.js` deve caricare prima le
+carte, o il gioco si ferma con "carta del Ionio non caricata".
+
+Il punto di partenza generato ha poco margine rispetto a quanto pretende
+la golden test: vedi la fragilità nota in `docs/refactoring.md` prima di
+rigenerare.
