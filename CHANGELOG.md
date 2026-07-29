@@ -9,6 +9,16 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
 
 ## Non rilasciato
 
+### Corretto
+- Regolazione vele AUTOMATICA (tasto **T**): premerlo la disinserisce di
+  nascosto, senza nessun segnale persistente — solo un avviso che sparisce
+  in un paio di secondi — mentre l'AUTOTIMONIERE ha sempre avuto la sua
+  riga fissa nel pannello. Risultato: frecce, QE e rotella sembravano non
+  rispondere più alle vele, senza modo di capire perché. Ora, finché
+  `game.auto` resta attivo, RANDA e FIOCCO mostrano al posto dello stato
+  normale "AUTOMATICA — T TORNA AL MANUALE" in accento, sempre visibile
+  come per l'autotimoniere.
+
 ### Cambiato
 - La carta del Ionio viene ora da `src/data/ionian.json` invece che dal
   letterale `IONIO` incorporato in `game.js` (~75 KB, il 40% del file):
