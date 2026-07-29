@@ -19,6 +19,7 @@ import { dirname, join } from "node:path";
 const here = dirname(fileURLToPath(import.meta.url));
 const GAME = join(here, "..", "src", "legacy", "game.js");
 const CARTA = join(here, "..", "src", "data", "ionian.json");
+const FLOTTA = join(here, "..", "src", "data", "barche.json");
 
 const STUB = `
 const __el = () => ({
@@ -82,10 +83,11 @@ const seconds = s => tick(Math.round(s * 60));
 
 export function runInGame(probe, { timeoutMs = 120000 } = {}) {
   const game = readFileSync(GAME, "utf8");
-  // La carta la passa l'host, come fa src/main.js nel browser: game.js non
-  // può importarla da sé, qui gira dentro una new Function.
+  // Carta e flotta le passa l'host, come fa src/main.js nel browser: game.js
+  // non può importarle da sé, qui gira dentro una new Function.
   const carta = `globalThis.VELA_CARTE={ionio:${readFileSync(CARTA, "utf8")}};`;
-  const src = `${STUB}\n${carta}\n${game}\n${DRIVER}\n${probe}`;
+  const flotta = `globalThis.VELA_BARCHE=${readFileSync(FLOTTA, "utf8")};`;
+  const src = `${STUB}\n${carta}\n${flotta}\n${game}\n${DRIVER}\n${probe}`;
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("probe scaduta")), timeoutMs);
     let done = false;

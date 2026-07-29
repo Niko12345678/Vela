@@ -28,10 +28,22 @@ rigiocata vera invece di un'interpolazione di posizioni.
 Gli strumenti disegnati con `fillText` a coordinate calcolate a mano sono
 la parte più sgradevole da modificare. Sul canvas resta solo la grafica.
 
-## 4. Barca come dati
+## 4. Barca come dati — fatto
 
-Le costanti in `K` sono i parametri di *una* barca: in `boats/*.json`
-diventano una flotta.
+`K` non è più un letterale: la flotta sta in `src/data/barche.json`,
+`setBarca(id)` scambia lo scafo e il menù ha il selettore. Quattro barche
+(gozzo, sloop 11 m, dodici da regata, cutter 15 m).
+
+Tre costanti che erano scritte a mano dentro `physics()` sono diventate
+parametri della barca, tutte a comportamento identico per lo sloop: la
+rigidezza `STIFF` (il `9000` che compariva sia in `physics` sia in
+`polarSpeed`), il `PESCAGGIO` (la soglia di incaglio, prima `-2` fissa) e
+il numero di mani di terzaroli, che ora è `K.REEF.length` invece di `3`.
+
+Resta da fare: il pescaggio distingue le barche solo all'incaglio, ma la
+carta non lo mostra da nessuna parte — chi governa il cutter scopre di non
+poter entrare in una cala solo toccando il fondo. Servirebbe un accenno di
+batimetrica sulla carta nautica.
 
 ## Fragilità nota: la partenza è al pelo
 

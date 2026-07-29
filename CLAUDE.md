@@ -10,7 +10,7 @@ italiano**: continua così.
 ## Comandi
 
 ```bash
-npm test         # 8 test, headless, ~6 s — NON serve npm install
+npm test         # 11 test, headless, ~6 s — NON serve npm install
 npm run dev      # http://localhost:5173
 npm run build    # dist/
 npm run charts   # rigenera le carte (serve Python + shapely + pyyaml)
@@ -23,9 +23,12 @@ Un test solo: `node --test --test-name-pattern "spinnaker" test/golden.test.js`
 1. **La golden test è il contratto della simulazione.** Se `npm test`
    diventa rosso dopo una tua modifica, hai rotto qualcosa: di' quale
    numero si è mosso e di quanto, e fermati. Non allargare le tolleranze e
-   non ritoccare le costanti `K` per far tornare i conti. I valori attesi
-   si cambiano solo quando il gioco cambia di proposito, in un commit
-   dedicato che spiega perché.
+   non ritoccare le costanti della barca per far tornare i conti. I valori
+   attesi si cambiano solo quando il gioco cambia di proposito, in un
+   commit dedicato che spiega perché. La golden test parla di **una** barca
+   sola, `crociera11`: gli altri scafi di `src/data/barche.json` hanno il
+   loro collaudo in `test/barche.test.js`, che ne fissa il carattere in
+   rapporto a quella e non in numeri assoluti.
 2. **Non riscrivere `src/legacy/game.js`.** Si smonta un pezzo alla volta,
    con `npm test` verde a ogni passo: deve restare eseguibile a ogni commit.
 3. **`src/sim/`, quando esisterà, non importa nulla da `render/` né da
