@@ -1088,7 +1088,10 @@ function drawHUD(){
       lasca:   ["TROPPO LASCATA — CAZZA",C("--warn")],
       stallo:  ["IN STALLO — LASCA",C("--accent")]
     };
-    const t=TXT[st]||TXT.cazzata;
+    // La regolazione automatica (T) tocca trim e jib da sola: senza un avviso
+    // persistente qui, frecce e rotella sembrano rotte perché non cambiano niente.
+    const auto=game.auto&&st!=="collo"&&st!=="avvolto"&&st!=="sventato";
+    const t=auto?["AUTOMATICA — T TORNA AL MANUALE",C("--accent")]:(TXT[st]||TXT.cazzata);
     ctx.textAlign="right";ctx.font="10px ui-monospace,monospace";
     ctx.fillStyle=t[1];ctx.fillText((extra||"")+t[0],gx+gw,y);ctx.textAlign="left";
 
