@@ -10,14 +10,7 @@ alle terre. Coste reali del Mar Ionio, distanze ridotte 1:6.
 
 Codice, commenti, test e documentazione sono **in italiano**. Continua così.
 
-## Dov'è il codice — leggere prima di qualsiasi comando
-
-La radice del repository **non è un albero di lavoro**: contiene solo
-`vela-repo.tar.gz` (il progetto intero), `CLAUDE.md`, `deploy.yml` e due
-guide. Non c'è `package.json` in radice, quindi `npm test` lanciato qui
-fallisce con ENOENT — non è un progetto rotto, è un archivio di consegna.
-
-L'archivio si scompatta in `vela-repo/` con dentro:
+## Struttura
 
 ```
 index.html                 markup, stile e tutte le variabili CSS del tema
@@ -30,20 +23,13 @@ tools/build-charts/        da YAML + Natural Earth a carta di gioco
 .github/workflows/deploy.yml
 ```
 
-`ISTRUZIONI-github.md` spiega perché: il progetto è pensato per essere
-caricato dall'interfaccia web di GitHub, e `deploy.yml` sta anche in radice
-perché il trascinamento nel browser salta le cartelle che cominciano per
-punto.
-
-Se ti viene chiesto di lavorare sul codice, scompatta l'archivio e lavora
-lì. Se il lavoro va committato, chiedi prima se il repository deve diventare
-un albero di lavoro normale (file scompattati e versionati) invece che un
-tarball: sono due modi incompatibili di tenere il progetto, e la scelta non
-è tua.
+`ISTRUZIONI-github.md` e `PROMPT-claude-code.md` documentano la consegna
+precedente, quando il progetto viaggiava come `vela-repo.tar.gz` da
+caricare a mano dall'interfaccia web di GitHub. L'archivio non c'è più — i
+file sono versionati singolarmente — quindi le istruzioni di caricamento
+sono superate; restano leggibili solo come storia.
 
 ## Comandi
-
-Da dentro `vela-repo/`:
 
 ```bash
 npm test         # 8 test, headless, ~6 s — NON serve npm install

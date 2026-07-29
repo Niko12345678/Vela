@@ -1,0 +1,65 @@
+# Mar Ionio — l'area di navigazione di serie.
+# Per aggiungerne un'altra: copia questo file, cambia riquadro e porti,
+# lancia `npm run charts`. Le coste arrivano dai dati Natural Earth.
+
+name: Mar Ionio
+out: src/data/ionian.json
+
+# riquadro geografico: lon_min, lat_min, lon_max, lat_max
+bbox: [20.28, 37.92, 21.10, 39.06]
+
+# Le distanze vengono divise per questo fattore. A grandezza naturale
+# una traversata durerebbe ore: forme e posizioni restano vere, le
+# distanze si comprimono.
+scale: 6
+
+min_area_km2: 0.25      # sotto questa soglia gli scogli si ignorano
+min_clearance: 170      # corridoio navigabile minimo attorno alle coste
+min_port_gap: 700       # porti più vicini di così vengono scartati
+
+# Nomi delle terre, riconosciute dal loro centro
+names:
+  Grecia:    {lat: 38.782, lon: 20.960}
+  Cefalonia: {lat: 38.227, lon: 20.575}
+  Lefkada:   {lat: 38.709, lon: 20.647}
+  Itaca:     {lat: 38.403, lon: 20.687}
+  Preveza:   {lat: 39.009, lon: 20.749}
+  Kalamos:   {lat: 38.624, lon: 20.909}
+  Meganisi:  {lat: 38.647, lon: 20.770}
+  Kastos:    {lat: 38.573, lon: 20.913}
+
+# Isole sotto la risoluzione del dato, ricostruite alla posizione reale
+extra_islands:
+  - {name: Skorpios, lat: 38.7005, lon: 20.7500, rlat: 0.0050, rlon: 0.0045}
+
+start: {lat: 38.700, lon: 20.760}
+
+marks:
+  - {name: Nydri,       lat: 38.708, lon: 20.722}
+  - {name: Spartochori, lat: 38.668, lon: 20.792}
+  - {name: Vathy Itaca, lat: 38.360, lon: 20.742}
+  - {name: Fiskardo,    lat: 38.462, lon: 20.592}
+  - {name: Sivota,      lat: 38.600, lon: 20.692}
+  - {name: Palairos,    lat: 38.795, lon: 20.870}
+
+ports:
+  - {name: Preveza,        lat: 38.958, lon: 20.751}
+  - {name: Nydri,          lat: 38.708, lon: 20.722}
+  - {name: Vasiliki,       lat: 38.628, lon: 20.610}
+  - {name: Sivota,         lat: 38.616, lon: 20.687}
+  - {name: Spartochori,    lat: 38.673, lon: 20.769}
+  - {name: Fiskardo,       lat: 38.457, lon: 20.578}
+  - {name: Vathy Itaca,    lat: 38.367, lon: 20.717}
+  - {name: Kioni,          lat: 38.446, lon: 20.694}
+  - {name: Sami,           lat: 38.253, lon: 20.647}
+  - {name: Argostoli,      lat: 38.174, lon: 20.489}
+  - {name: Poros,          lat: 38.152, lon: 20.771}
+  - {name: Assos,          lat: 38.379, lon: 20.539}
+  - {name: Frikes,         lat: 38.462, lon: 20.680}
+  - {name: Palairos,       lat: 38.783, lon: 20.869}
+  - {name: Mytikas,        lat: 38.723, lon: 20.947}
+  - {name: Kalamos,        lat: 38.622, lon: 20.926}
+  - {name: Kastos,         lat: 38.576, lon: 20.917}
+  - {name: Astakos,        lat: 38.535, lon: 21.086}
+  - {name: Vathy Meganisi, lat: 38.664, lon: 20.783}
+  - {name: Skorpios,       lat: 38.700, lon: 20.756}
