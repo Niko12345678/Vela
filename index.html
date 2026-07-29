@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Vela — simulatore</title>
+<style>
+  :root{
+    --sea-deep:#0b3247;
+    --sea:#12506d;
+    --shoal:#3d92ab;
+    --sand:#e2cd9c;
+    --land:#6f9455;
+    --land-hi:#8fb26b;
+    --chart:#f3ead4;
+    --chart-dim:#b9ac8d;
+    --ink:#0a2433;
+    --accent:#e2662d;
+    --good:#7fc47a;
+    --warn:#e8b13d;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;height:100%;overflow:hidden;background:var(--sea-deep);
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;color:var(--chart);
+    -webkit-tap-highlight-color:transparent}
+  canvas{display:block;position:absolute;inset:0;touch-action:none}
+
+  .panel{
+    position:absolute;background:rgba(8,32,46,.82);border:1px solid rgba(243,234,212,.22);
+    backdrop-filter:blur(3px);border-radius:2px;
+  }
+  #settings{top:12px;left:50%;transform:translateX(-50%);padding:8px 12px;display:flex;
+    gap:14px;align-items:center;flex-wrap:wrap;font-size:11px;letter-spacing:.06em;z-index:5}
+  #settings.hidden{display:none}
+  #showm{top:12px;left:50%;transform:translateX(-50%);padding:5px 12px;display:none;
+    z-index:5;font-size:11px;letter-spacing:.14em;cursor:pointer;color:var(--chart-dim);
+    border:1px solid rgba(243,234,212,.18);background:rgba(8,32,46,.55)}
+  #showm.on{display:block}
+  #showm:hover{color:var(--chart);border-color:var(--accent)}
+  #settings label{display:flex;gap:6px;align-items:center;text-transform:uppercase;color:var(--chart-dim)}
+  #settings input[type=range]{width:88px;accent-color:var(--accent)}
+  #settings select{background:rgba(0,0,0,.35);border:1px solid rgba(243,234,212,.25);
+    color:var(--chart);font:inherit;font-size:11px;padding:3px 4px;border-radius:2px}
+  #settings input[type=text]{width:80px;background:rgba(0,0,0,.35);border:1px solid rgba(243,234,212,.25);
+    color:var(--chart);font:inherit;padding:3px 5px;border-radius:2px}
+  button{font:inherit;font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    background:rgba(243,234,212,.1);border:1px solid rgba(243,234,212,.3);color:var(--chart);
+    padding:4px 9px;border-radius:2px;cursor:pointer}
+  button:hover{background:rgba(226,102,45,.35);border-color:var(--accent)}
+  button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .val{color:var(--chart);min-width:44px;display:inline-block}
+
+  #tut{top:58px;left:50%;transform:translateX(-50%);width:min(520px,calc(100% - 28px));
+    padding:12px 16px 11px;display:none;z-index:6;font-size:12px;line-height:1.6}
+  #tut.on{display:block}
+  #tutbar{display:flex;gap:10px;align-items:baseline;margin-bottom:6px}
+  #tutnum{font-size:10px;color:var(--chart-dim);letter-spacing:.1em}
+  #tutttl{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);font-weight:600}
+  #tuttxt{color:#e5dbc4}
+  #tuttxt b{color:var(--chart)}
+  #tutgoal{margin-top:7px;padding-top:7px;border-top:1px solid rgba(243,234,212,.15);
+    font-size:11px;color:var(--good);letter-spacing:.03em}
+  #tutgoal.done{color:var(--good)}
+  #tutbtns{margin-top:10px;display:flex;gap:8px;justify-content:flex-end}
+  #tutbtns button{font-size:10px;padding:4px 10px}
+  #help{position:absolute;inset:0;display:none;place-items:center;z-index:10;
+    background:rgba(6,24,35,.86)}
+  #logbook{position:absolute;inset:0;display:none;place-items:center;z-index:10;
+    background:rgba(6,24,35,.88)}
+  #logbook.on{display:grid}
+  #logbox{width:min(780px,calc(100% - 32px));max-height:88vh;overflow-y:auto;
+    padding:24px 28px 0;border:1px solid rgba(243,234,212,.25);background:rgba(8,32,46,.97);
+    border-radius:3px;font-size:12px;scrollbar-width:thin}
+  #logbox h1{font-size:15px;letter-spacing:.24em;text-transform:uppercase;margin:0 0 6px;font-weight:600}
+  #logbox h2{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);
+    margin:18px 0 6px;font-weight:600}
+  #logsum{color:var(--chart-dim);font-size:11px;letter-spacing:.05em}
+  #logcols{display:flex;gap:26px;flex-wrap:wrap}
+  #logcols>div:first-child{flex:1 1 380px;min-width:320px}
+  #logbox table{border-collapse:collapse;width:100%;font-size:11px}
+  #logbox td{padding:3px 6px 3px 0;border-bottom:1px solid rgba(243,234,212,.08);white-space:nowrap}
+  #logbox td.n{text-align:right;color:var(--chart-dim)}
+  #logbox td.r{color:var(--warn);text-align:right}
+  #logbox td button{font-size:9px;padding:2px 7px}
+  #logbox .empty{color:var(--chart-dim);line-height:1.6;font-size:11px}
+  #polarcv{display:block}
+  #logfoot{position:sticky;bottom:0;margin-top:22px;padding:14px 0 20px;display:flex;
+    gap:8px;justify-content:flex-end;background:linear-gradient(to bottom,rgba(8,32,46,0),rgba(8,32,46,.97) 35%)}
+  #ask{position:absolute;inset:0;display:none;place-items:center;z-index:11;
+    background:rgba(6,24,35,.72)}
+  #ask.on{display:grid}
+  #askbox{max-width:400px;padding:22px 26px;border:1px solid rgba(243,234,212,.28);
+    background:rgba(8,32,46,.97);border-radius:3px;font-size:13px;line-height:1.6}
+  #askbtns{margin-top:18px;display:flex;gap:8px;justify-content:flex-end}
+  #help.on{display:grid}
+  #helpbox{max-width:620px;width:calc(100% - 32px);max-height:88vh;overflow-y:auto;
+    padding:26px 30px 0;border:1px solid rgba(243,234,212,.25);
+    background:rgba(8,32,46,.97);border-radius:3px;line-height:1.65;font-size:13px;
+    scrollbar-width:thin;scrollbar-color:rgba(243,234,212,.35) transparent}
+  #helpfoot{position:sticky;bottom:0;margin-top:20px;padding:14px 0 20px;text-align:right;
+    background:linear-gradient(to bottom,rgba(8,32,46,0),rgba(8,32,46,.97) 35%)}
+  #helpfoot button{padding:8px 18px}
+  #helpbox h1{font-size:15px;letter-spacing:.24em;text-transform:uppercase;margin:0 0 4px;font-weight:600}
+  #helpbox .sub{color:var(--chart-dim);font-size:11px;letter-spacing:.1em;margin-bottom:18px;text-transform:uppercase}
+  #helpbox h2{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);
+    margin:18px 0 7px;font-weight:600}
+  kbd{background:rgba(243,234,212,.12);border:1px solid rgba(243,234,212,.3);border-bottom-width:2px;
+    border-radius:3px;padding:1px 6px;font:inherit;font-size:11px}
+  #helpbox table{border-collapse:collapse;width:100%}
+  #helpbox td{padding:3px 0;vertical-align:top}
+  #helpbox td:first-child{width:170px;white-space:nowrap}
+  #helpbox p{margin:6px 0;color:#ded3ba}
+
+  #touch{position:absolute;bottom:0;left:0;right:0;height:0;z-index:4;display:none}
+  .tzone{position:absolute;bottom:14px;width:132px;height:66px;display:flex;gap:6px}
+  .tzone button{flex:1;font-size:18px;padding:0;background:rgba(8,32,46,.8)}
+  #tl{left:14px} #tr{right:14px} #tm{left:50%;transform:translateX(-50%)}
+  #touch .tzone button{font-size:13px}
+  body.touch #touch{display:block}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+
+<div id="settings" class="panel">
+  <label>Vento <input id="wind" type="range" min="2" max="16" step="0.5" value="7"><span class="val" id="windv">7.0 m/s</span></label>
+  <label>Ritmo <select id="tscale"><option value="1">1×</option><option value="1.5">1,5×</option><option value="2" selected>2×</option><option value="3">3×</option><option value="4">4×</option><option value="6">6×</option></select></label>
+  <label>Tratteggi <input id="vis" type="range" min="0" max="1.6" step="0.1" value="1"></label>
+  <label>Mappa <select id="mapsel"><option value="ionio" selected>Mar Ionio</option><option value="rnd">Casuale</option></select></label>
+  <label>Partenza <select id="port"></select></label>
+  <label>Seme <input id="seed" type="text" value="mantova"></label>
+  <label><input id="easy" type="checkbox" checked> Mare facile</label>
+  <label><input id="winv" type="checkbox"> Rotelle invertite</label>
+  <button id="tutb">Tutorial</button>
+  <button id="gen">Nuova mappa</button>
+  <button id="reset">Riporta al via</button>
+  <button id="logb">Giornale</button>
+  <button id="helpb">Comandi</button>
+  <button id="hidem">Nascondi (M)</button>
+</div>
+
+<div id="touch">
+  <div class="tzone" id="tl"><button data-k="ArrowLeft">◀</button><button data-k="ArrowRight">▶</button></div>
+  <div class="tzone" id="tm"><button data-k="q">Fio +</button><button data-k="e">Fio −</button></div>
+  <div class="tzone" id="tr"><button data-k="ArrowUp">Ran +</button><button data-k="ArrowDown">Ran −</button></div>
+</div>
+
+<div id="tut" class="panel">
+  <div id="tutbar"><span id="tutnum"></span><span id="tutttl"></span></div>
+  <div id="tuttxt"></div>
+  <div id="tutgoal"></div>
+  <div id="tutbtns">
+    <button id="tutnext">Avanti</button>
+    <button id="tutskip">Salta passo</button>
+    <button id="tutquit">Chiudi tutorial</button>
+  </div>
+</div>
+
+<div id="showm" class="panel" title="Mostra il menù (M)">☰ MENÙ</div>
+
+<div id="logbook">
+  <div id="logbox">
+    <h1>Giornale di bordo</h1>
+    <div id="logsum"></div>
+    <div id="logcols">
+      <div>
+        <div class="empty" style="margin-top:14px">Le miglia sono quelle vere: la carta è ridotta 1:6, quindi ogni traversata corrisponde a sei volte la distanza percorsa sullo schermo, e il tempo reale sarebbe sei volte il cronometro. La velocità media in nodi è invece quella effettiva della barca.</div>\n        <h2>Migliori traversate</h2>
+        <div id="logbest"></div>
+        <h2>Ultime</h2>
+        <div id="loglast"></div>
+      </div>
+      <div>
+        <h2>Polare</h2>
+        <canvas id="polarcv" width="300" height="300"></canvas>
+      </div>
+    </div>
+    <div id="logfoot">
+      <button id="logclear">Azzera giornale</button>
+      <button id="logclose">Chiudi (L)</button>
+    </div>
+  </div>
+</div>
+
+<div id="ask">
+  <div id="askbox">
+    <div id="asktxt"></div>
+    <div id="askbtns">
+      <button id="askno">Annulla (Esc)</button>
+      <button id="askyes">Conferma (Invio)</button>
+    </div>
+  </div>
+</div>
+
+<div id="help">
+  <div id="helpbox">
+    <h1>Vela</h1>
+    <div class="sub">Simulatore di navigazione a vela · sloop 11 m, randa e fiocco</div>
+    <h2>Comandi</h2>
+    <table>
+      <tr><td><kbd>←</kbd> <kbd>→</kbd> / <kbd>A</kbd> <kbd>D</kbd></td><td>Barra del timone — resta dove la lasci</td></tr>
+      <tr><td><kbd>↑</kbd> <kbd>↓</kbd> / <kbd>W</kbd> <kbd>S</kbd></td><td>Cazza / lasca la <strong>randa</strong></td></tr>
+      <tr><td><kbd>Q</kbd> <kbd>E</kbd></td><td>Cazza / lasca il <strong>fiocco</strong></td></tr>
+      <tr><td><kbd>B</kbd></td><td>Fiocco <strong>a collo</strong> — per uscire dalla panne</td></tr>
+      <tr><td><kbd>F</kbd></td><td>Avvolgi / issa il fiocco</td></tr>
+      <tr><td><kbd>G</kbd></td><td>Issa / ammaina lo <strong>spinnaker</strong></td></tr>
+      <tr><td><kbd>X</kbd></td><td>Prendi una <strong>mano di terzaroli</strong> (riduci la randa)</td></tr>
+      <tr><td><kbd>Shift</kbd> + <kbd>↑</kbd><kbd>↓</kbd></td><td>Muove le due scotte insieme</td></tr>
+      <tr><td>Rotella verticale</td><td>Randa · in su cazza, in giù lasca</td></tr>
+      <tr><td>Rotella orizzontale</td><td>Fiocco (o spinnaker) · a sinistra cazza</td></tr>
+      <tr><td><kbd>Ctrl</kbd> + rotella</td><td>Zoom della carta</td></tr>
+      <tr><td><kbd>Z</kbd></td><td>Governo: richiamo al centro → rotta → vento → barra libera</td></tr>
+      <tr><td><kbd>Spazio</kbd></td><td>Barra al centro, autotimoniere disinserito</td></tr>
+      <tr><td><kbd>T</kbd></td><td>Regolazione automatica delle vele (assistenza)</td></tr>
+      <tr><td><kbd>+</kbd> <kbd>−</kbd></td><td>Zoom</td></tr>
+      <tr><td><kbd>C</kbd></td><td>Carta nautica a tutto schermo</td></tr>
+      <tr><td><kbd>L</kbd></td><td>Giornale di bordo</td></tr>
+      <tr><td><kbd>M</kbd></td><td>Nascondi / mostra il menù in alto</td></tr>
+      <tr><td><kbd>R</kbd> · <kbd>N</kbd> · <kbd>P</kbd> · <kbd>H</kbd></td><td>Riparti · nuova mappa · pausa · questa schermata</td></tr>
+    </table>
+    <h2>Come si naviga</h2>
+    <p>Non puoi risalire il vento: entro ~35° dalla sua direzione le vele fileggiano e ti fermi. Per andare sopravvento devi bordeggiare, cioè zigzagare a ~45°.</p>
+    <p>Le due barre in basso a sinistra sono la <strong>posizione delle scotte</strong>: tutta cazzata a sinistra, tutta lascata a destra. La <strong>fascia verde</strong> è calcolata cercando la scotta che dà più spinta con il vento che hai in quel momento, e la linea verde sottile è l'ottimo esatto. Portaci sopra il segno bianco e la vela è regolata.</p>
+    <p>Attenzione a un'idea diffusa ma sbagliata: <em>non</em> esiste un angolo d'attacco buono per tutte le andature. Di bolina la vela va tenuta a ~27° dal vento, al gran lasco a ~47°, in poppa a 90°. Cioè più poggi, più la vela va tenuta perpendicolare al vento. La fascia verde lo fa già per te.</p>
+    <p>Più vai veloce, più il vento apparente gira verso prua: dopo aver accelerato la fascia verde si sposta a sinistra e dovrai cazzare ancora un po'.</p>
+    <p><strong>Con il vento in poppa</strong> apri tutto: le vele lavorano per resistenza, non per portanza. Non c'è nessuna regolazione fine da cercare, la scotta a fine corsa <em>è</em> la regolazione giusta.</p>
+    <p>I tratteggi sull'acqua mostrano forza e direzione del vento; le macchie scure sono raffiche. Entraci per andare più forte, ma preparati allo sbandamento.</p>
+    <p>Alle andature portanti il fiocco finisce nel cono d'ombra della randa e smette di tirare. Lascalo tutto, oltre i 60°, con vento quasi in poppa: passerà dall'altro lato, <strong>a farfalla</strong>, e recupererai tutta la spinta.</p>
+    <h2>Leggere le vele a colpo d'occhio</h2>
+    <p>Non serve guardare i numeri: guarda il <strong>colore della vela</strong>.</p>
+    <p><span style="color:#e8c474">Ambra e trasparente</span> = fileggia, non tira: cazza.<br>
+       <span style="color:#7fc47a">Bianca con il bordo verde</span> = regolazione ottima, lasciala lì.<br>
+       <span style="color:#e2662d">Arancione</span> = in stallo, troppo cazzata: lasca.<br>
+       <span style="color:#6ea8d6">Azzurra</span> = a collo, l'hai messa lì tu.</p>
+    <p>Su ogni vela ci sono due <strong>filetti segnavento</strong>, verde sottovento e rosso sopravvento. Dritti all'indietro tutti e due significa flusso pulito. Se il rosso si solleva stai fileggiando; se il verde vortica sei in stallo. È lo stesso segnale che si guarda in barca.</p>
+    <h2>Se ti pianti nel vento</h2>
+    <p>Succede a tutti: la barca sale verso il vento, le vele sbattono, perdi velocità e il timone non morde più. Sei <strong>in panne</strong>, e da fermo il timone non serve a niente.</p>
+    <p>La manovra vera è una: <strong>fiocco a collo</strong> con <kbd>B</kbd>. Il fiocco viene tenuto dal lato sbagliato, il vento lo spinge e fa cadere la prua sottovento. Dopo una decina di secondi riprendi velocità e il fiocco si libera da solo. Aiuta anche lascare la randa mentre lo fai.</p>
+    <h2>Vento forte</h2>
+    <p>Oltre i 20 nodi la barca è sovrainvelata: sbanda troppo, straorza e il timone perde presa. Non è un difetto, è il segnale che devi <strong>ridurre la tela</strong>. <kbd>X</kbd> prende una mano di terzaroli sulla randa (66% della superficie, poi 44%), <kbd>F</kbd> avvolge il fiocco. Si va meno forte ma si torna a governare — e spesso, riducendo, si va perfino <em>più</em> forte, perché la barca smette di coricarsi e di frenare col timone.</p>
+    <h2>Lo spinnaker</h2>
+    <p>Scappando davanti al vento te ne porti via una parte: al gran lasco il vento apparente scende da 7,5 a 5,5 m/s, e siccome la forza va col quadrato della velocità la pressione sulle vele quasi si dimezza. Per questo alle andature portanti la velocità non sale come ti aspetteresti: <strong>hai le vele sbagliate</strong>, non un problema di regolazione.</p>
+    <p><kbd>G</kbd> issa lo <strong>spinnaker</strong>, tre volte più grande del fiocco e molto meno coperto dalla randa. Si regola con gli stessi tasti <kbd>Q</kbd> <kbd>E</kbd>. Vale dai 110° di vento reale in poi: sotto i 66° apparenti si sgonfia, diventa pallido e sbatte, e devi poggiare o ammainarlo.</p>
+    <p>Il guadagno misurato: +15% al lasco, +25% al gran lasco, +26% in poppa. Di bolina invece è un freno, quindi ammainalo prima di risalire il vento.</p>
+    <h2>Il governo</h2>
+    <p>Di serie la barra resta dove la metti, com'è su una barca con la frizione inserita. Se ti sembra scomodo, con <kbd>Z</kbd> puoi mettere il <strong>richiamo al centro</strong>: la barra torna dritta da sola quando la molli, come se ci fosse un elastico. Gli altri due passi di <kbd>Z</kbd> sono l'autotimoniere vero e proprio, su rotta bussola o su angolo del vento.</p>
+    <h2>Bilanciamento</h2>
+    <p>Randa e fiocco tirano su due punti diversi. La <strong>randa</strong>, a poppavia dell'albero, fa <strong>orzare</strong> (girare verso il vento). Il <strong>fiocco</strong>, a prua, fa <strong>puggiare</strong>. L'indicatore <em>BILANCIAMENTO</em> ti dice chi sta vincendo: portalo al centro e la barca tiene la rotta praticamente da sola, senza toccare il timone.</p>
+    <p>Attenzione: la regolazione più veloce non è quella più equilibrata. Al traverso la regolazione da velocità massima fa orzare di 60° in un minuto a barra libera; quella bilanciata perde due decimi di nodo ma tiene la rotta entro 10°.</p>
+    <p>Avvolgere il fiocco (<kbd>F</kbd>) toglie potenza ma sbilancia forte verso l'orza: se lo fai, lasca anche la randa.</p>
+    <p><em>Mare facile</em>, in alto, attenua raffiche e squilibri. Toglilo quando ti senti a tuo agio.</p>
+    <p><em>Ritmo</em>, da 1× a 6×, accelera lo scorrere del tempo: velocità, virate, raffiche e cronometro cambiano tutti insieme, quindi la barca si comporta esattamente allo stesso modo, solo che una traversata dura meno. Di serie è 2×.</p>
+<h2>La carta nautica</h2>
+    <p><kbd>C</kbd> apre la carta a tutto schermo, con l'aspetto di una carta di navigazione vera: terre color sabbia, fascia di secche azzurra, reticolato in <strong>gradi e primi veri</strong> di latitudine e longitudine, rosa dei venti e scala grafica in miglia. Ci trovi tutti i porti col nome, le boe, la tua rotta tracciata e quella del fantasma.</p>
+    <p>Trascina per spostare, rotella per ingrandire, <kbd>0</kbd> per inquadrare tutto. Passando col cursore su un punto qualsiasi leggi <strong>rilevamento e distanza dalla barca</strong> e le sue coordinate: è così che si pianifica una traversata prima di partire. Mentre la carta è aperta la navigazione è in pausa, come quando ti fermi al tavolo da carteggio.</p>
+    <h2>Le carte</h2>
+    <p>Il menù in alto ha un elenco di <strong>porti di partenza</strong>: venti ancoraggi veri dell'arcipelago, da Preveza a Poros, passando per Fiskardo, Kioni, Vasiliki e Astakos. Sceglierne uno ti porta lì e azzera il cronometro.</p>
+    <p>La mappa di serie è il <strong>Mar Ionio</strong>: Lefkada, Cefalonia, Itaca, Meganisi, Skorpios, Kalamos, Kastos e la costa della Grecia continentale, che sul bordo della carta è tagliata dritta perché la terra continua oltre. Le coste vengono da dati cartografici reali, quindi forme e posizioni relative sono quelle vere. Le distanze invece sono ridotte 1:6, altrimenti da Nydri a Vathy ci vorrebbe un'ora di navigazione.</p>
+    <p>Le sei boe sono ancoraggi veri: Nydri, Spartochori a Meganisi, Vathy a Itaca, Fiskardo a nord di Cefalonia, Sivota e Palairos sulla costa greca. Nel menù puoi passare alla mappa <em>Casuale</em>, che genera un arcipelago diverso per ogni seme.</p>
+    <h2>Giornale di bordo</h2>
+    <p><kbd>L</kbd> apre il giornale. Ogni volta che parti da un porto e ne raggiungi un altro la traversata viene registrata da sola: tempo, miglia, velocità media. Il tempo migliore su ogni tratta diventa un <strong>record</strong>, e da lì in poi rifacendo quella rotta trovi in acqua il <strong>fantasma</strong> della tua traversata migliore, con la sua scia tratteggiata e il differenziale in secondi in plancia. Dal giornale puoi anche premere <em>Sfida</em> su una tratta per essere portato al porto di partenza con quel fantasma già armato.</p>
+    <p>Il <strong>polare</strong> confronta il tuo massimo per ogni settore di vento con la curva teorica della barca, calcolata risolvendo l'equilibrio fra spinta velica e resistenza dello scafo. Se un settore resta molto sotto la curva, lì hai qualcosa da imparare.</p>
+    <p>Tutto viene salvato: nell'archivio degli artefatti se disponibile, altrimenti in quello del browser, altrimenti solo per la sessione. Il giornale ti dice quale sta usando.</p>
+    <h2>Regata</h2>
+    <p>Gira le 6 boe <strong>in ordine</strong>, lasciandole a meno di 45 m. La freccia sul bordo dello schermo indica la prossima. Il cronometro parte quando ti muovi.</p>
+    <div id="helpfoot"><button id="closehelp">Molla gli ormeggi</button></div>
+  </div>
+</div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
