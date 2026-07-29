@@ -1,8 +1,8 @@
 # `game.js` — il gioco ancora in un pezzo solo
 
-~1900 righe, sezioni separate da righe `══════`, nell'ordine: utilità →
-costanti `K` → mondo (letterale `IONIO`, `mkIsland`, `landDepth`,
-`buildShade`, `genWorld`) → stato (`boat`, `game`, vento) → fisica
+~1890 righe, sezioni separate da righe `══════`, nell'ordine: utilità →
+costanti `K` → mondo (`mkIsland`, `landDepth`, `buildShade`, `genWorld`) →
+stato (`boat`, `game`, vento) → fisica
 (`sailAero`, `aeroC`, `bestTrim`, `polarSpeed`, `trimWindows`, `physics`,
 `autopilot`) → tratteggi del vento → input → disegno → strumenti →
 interfaccia → carta nautica → giornale di bordo → tutorial → ciclo.
@@ -24,5 +24,10 @@ Quattro cose da sapere prima di toccarlo:
   esiste, altrimenti `localStorage`, altrimenti memoria di sessione.
   Nessuno dei tre è garantito: non dare per scontato che `LOG` sopravviva.
 
-Il letterale `IONIO` pesa ~75 KB, il 40% del file, ed è il primo candidato
-all'estrazione: vedi `docs/refactoring.md`.
+**Niente `import` qui dentro.** La harness esegue questo file dentro una
+`new Function`, dove una dichiarazione `import` è un errore di sintassi:
+tutti e 8 i test diventerebbero rossi in un colpo. Quello che serve da
+fuori lo passa l'host su `globalThis` — è così che arriva la carta
+(`IONIO`, da `src/data/carte.js` o dalla harness). Vedi
+`docs/refactoring.md`: sciogliere questo nodo è il primo passo verso
+`src/sim/`.

@@ -12,11 +12,16 @@ fisica. Da qui sono usciti tre bug che a leggere il codice non si vedevano
 unità di tempo, il `dt` negativo che mandava tutto in NaN in silenzio, un
 ascoltatore registrato su una `const` prima della sua dichiarazione.
 
-`runInGame(codice)` concatena stub del DOM + `game.js` + driver + il tuo
-codice dentro una `new Function`: la sonda vede **tutte le variabili di
-modulo del gioco** (`boat`, `game`, `world`, `windBase`, `physics`,
+`runInGame(codice)` concatena stub del DOM + carte + `game.js` + driver +
+il tuo codice dentro una `new Function`: la sonda vede **tutte le variabili
+di modulo del gioco** (`boat`, `game`, `world`, `windBase`, `physics`,
 `windAt`, …) come se fosse scritta in fondo al file. Si chiude chiamando
 `report({...})`.
+
+Da qui discende un vincolo: **`game.js` non può contenere `import`**, che
+in una `new Function` è errore di sintassi. Le carte gliele passa la
+harness su `globalThis.VELA_CARTE`, come fa `src/data/carte.js` nel
+browser.
 
 Tre modi di far avanzare il tempo, da tenere distinti:
 
