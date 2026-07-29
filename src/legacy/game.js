@@ -179,7 +179,7 @@ function ionianWorld(){
 /* ══════════════════ stato ══════════════════ */
 const boat={x:0,y:0,vx:0,vy:0,h:0,
   trim:45*D2R, jib:35*D2R,                      // scotte: randa e fiocco
-  rudder:0, rudderCmd:0, yawRate:0,             // barra: comando e pala (con inerzia)
+  rudder:0, rudderCmd:0, rudderTrim:0, yawRate:0,   // barra: comando, cavallino (il neutro) e pala (con inerzia)
   boomSide:1, boomDraw:Math.PI, jibDraw:Math.PI, jibSide:1, butterfly:false,
   jibFurled:false, jibBack:false, spi:false, spiLimp:false, reef:0, stuck:0, gtime:0,
   wM:{opt:0,lo:0,hi:90*D2R,maxT:90*D2R}, wJ:{opt:0,lo:0,hi:80*D2R,maxT:80*D2R},
@@ -204,7 +204,7 @@ function resetBoat(){
     if(worst>bs){bs=worst;bh=h;}
   }
   boat.h=bh;
-  boat.trim=45*D2R;boat.jib=35*D2R;boat.rudder=0;boat.rudderCmd=0;boat.yawRate=0;
+  boat.trim=45*D2R;boat.jib=35*D2R;boat.rudder=0;boat.rudderCmd=0;boat.rudderTrim=0;boat.yawRate=0;
   boat.jibFurled=false;boat.jibBack=false;boat.spi=false;boat.reef=0;boat.stuck=0;boat.gtime=0;
   game.pilot=0;boat.wake.length=0;boat.grounded=0;
   game.clock=0;game.next=0;game.started=false;game.done=null;
@@ -523,7 +523,7 @@ function autopilot(dt){
   if(game.pilot===1){
     // richiamo elastico: la barra torna piano al centro se non la tieni
     const L=keys["arrowleft"]||keys["a"], R=keys["arrowright"]||keys["d"];
-    if(!L&&!R) boat.rudderCmd-=boat.rudderCmd*Math.min(1,1.9*dt);
+    if(!L&&!R) boat.rudderCmd-=(boat.rudderCmd-boat.rudderTrim)*Math.min(1,1.9*dt);   // torna al cavallino, non al centro
     return;
   }
   // un pilota che continua a governare con la barca ferma ti impedisce di ripartire
@@ -535,6 +535,21 @@ function autopilot(dt){
   boat.rudderCmd=clamp(err*3.4-boat.yawRate*6.5,-1,1);
 }
 function fmtT(s){const m=Math.floor(s/60);return String(m).padStart(2,"0")+":"+String(Math.floor(s%60)).padStart(2,"0")+"."+String(Math.floor(s*10%10));}
+
+/* ─ cavallino ─
+   Per non cambiare rotta serve tenere la barra ferma FUORI dal centro: di
+   bolina un quarto di barra, con vento fresco quasi metà. Con le sole
+   frecce (1,15 per secondo) quel valore non si riesce né a centrare né a
+   ritrovare dopo una correzione, e sembra che la barca non tenga la rotta.
+   Il cavallino è il neutro della barra: `,` e `.` lo spostano fine, la
+   barra ci va insieme, e da lì in poi i comandi tornano lì invece che al
+   centro. Non è una forza in più — la fisica non lo vede nemmeno. */
+const barraDesc=v=>Math.round(Math.abs(v)*100)+"% a "+(v>0?"dritta":"sinistra");
+function setCavallino(v){
+  const nv=clamp(v,-1,1);
+  boat.rudderCmd=clamp(boat.rudderCmd+(nv-boat.rudderTrim),-1,1);
+  boat.rudderTrim=nv;
+}
 
 /* ══════════════════ tratteggi del vento ══════════════════ */
 /* Ogni tratteggio segue il vento LOCALE: dentro una raffica si allunga,
@@ -638,7 +653,21 @@ addEventListener("keydown",e=>{
   if(k==="t"){game.auto=!game.auto;say(game.auto?"Regolazione vele AUTOMATICA":"Regolazione vele manuale");}
   if(k==="+"||k==="=")game.zoom=clamp(game.zoom*1.25,1.1,9);
   if(k==="-"||k==="_")game.zoom=clamp(game.zoom/1.25,1.1,9);
-  if(k===" "){boat.rudderCmd=0;if(game.pilot){game.pilot=0;say("Autotimoniere disinserito — barra al centro");}}
+  if(k==="k"){
+    if(game.pilot>=2) say("Governa l'autotimoniere: Z per riprendere la barra");
+    else{
+      boat.rudderTrim=boat.rudderCmd;
+      say(Math.abs(boat.rudderTrim)<0.02?"Cavallino azzerato — la barra è dritta"
+          :"Cavallino preso a "+barraDesc(boat.rudderTrim)+" — la barra torna qui, non al centro");
+    }
+  }
+  if(k===" "){
+    if(e.shiftKey){boat.rudderTrim=0;boat.rudderCmd=0;}
+    else boat.rudderCmd=boat.rudderTrim;
+    if(game.pilot){game.pilot=0;say("Autotimoniere disinserito — "+(boat.rudderTrim?"barra al cavallino":"barra dritta"));}
+    else if(e.shiftKey) say("Barra dritta e cavallino azzerato");
+    else if(boat.rudderTrim) say("Barra riportata al cavallino — "+barraDesc(boat.rudderTrim));
+  }
 });
 addEventListener("keyup",e=>{keys[e.key.toLowerCase()]=0;});
 addEventListener("blur",()=>{for(const k in keys)keys[k]=0;});
@@ -654,6 +683,12 @@ function input(dt){
     // la barra resta dove la lasci (frizione inserita) e si muove con inerzia
     if(L&&!R) boat.rudderCmd=clamp(boat.rudderCmd-1.15*dt,-1,1);
     else if(R&&!L) boat.rudderCmd=clamp(boat.rudderCmd+1.15*dt,-1,1);
+  }
+  // cavallino: cinque volte più fine delle frecce, e sposta il neutro con sé
+  if(game.pilot<2){
+    const ct=0.22*dt;
+    if(keys[","]&&!keys["."]) setCavallino(boat.rudderTrim-ct);
+    else if(keys["."]&&!keys[","]) setCavallino(boat.rudderTrim+ct);
   }
   if(!game.auto){
     const rate=50*D2R*dt, both=!!keys["shift"];
@@ -1153,14 +1188,23 @@ function drawHUD(){
   ctx.fillStyle="rgba(243,234,212,.25)";ctx.fillRect(rx+rw2/2-.5,by+132,1,8);
   ctx.fillStyle="rgba(243,234,212,.35)";ctx.fillRect(rx+rw2/2+boat.rudderCmd*rw2/2-1,by+129,2,14);
   ctx.fillStyle=C("--chart");ctx.fillRect(rx+rw2/2+boat.rudder*rw2/2-1.5,by+131,3,10);
+  // cavallino: il neutro a cui tornano i comandi, sotto la scala
+  if(Math.abs(boat.rudderTrim)>0.005){ctx.fillStyle=C("--accent");
+    ctx.fillRect(rx+rw2/2+boat.rudderTrim*rw2/2-1,by+143,2,5);}
   label("SBAND.",gx+186,by+140);
   ctx.fillStyle=Math.abs(boat.heel)>0.7?C("--accent"):C("--chart");
   ctx.font="13px ui-monospace,monospace";ctx.textAlign="right";
   ctx.fillText(Math.round(Math.abs(boat.heel)*32)+"°",gx+gw,by+141);ctx.textAlign="left";
 
-  label(game.pilot===1?"BARRA":"AUTOTIMONIERE",gx,by+164);
+  // col cavallino inserito la riga dice quello: un neutro spostato senza
+  // segnale fisso è esattamente l'inganno già corretto per le vele automatiche
+  const cavOn=!game.pilot&&Math.abs(boat.rudderTrim)>0.005;
+  label(cavOn?"CAVALLINO":(game.pilot===1?"BARRA":"AUTOTIMONIERE"),gx,by+164);
   ctx.textAlign="right";ctx.font="10px ui-monospace,monospace";
-  if(game.pilot===1){ctx.fillStyle=C("--chart");
+  if(cavOn){ctx.fillStyle=C("--accent");
+    ctx.fillText(Math.round(Math.abs(boat.rudderTrim)*100)+"% "+(boat.rudderTrim>0?"DRITTA":"SIN")
+      +"  ·  MAIUSC+SPAZIO AZZERA",gx+gw,by+164);}
+  else if(game.pilot===1){ctx.fillStyle=C("--chart");
     ctx.fillText("RICHIAMO AL CENTRO",gx+gw,by+164);}
   else if(game.pilot===2){ctx.fillStyle=C("--good");
     ctx.fillText("ROTTA "+String(Math.round((game.pilotTgt*R2D+360)%360)).padStart(3,"0")+"°",gx+gw,by+164);}
@@ -1786,7 +1830,7 @@ const TUT=[
  txt:"I <b>tratteggi</b> sull'acqua scorrono nella direzione in cui soffia il vento: più sono lunghi e chiari, più è forte. Nella <b>rosa</b> in alto a destra la freccia arancione indica da dove viene, e il settore giallo è la zona in cui non puoi navigare. La rosa è orientata a prua: sta ferma la barchetta e gira il mondo."},
 
 {ttl:"La barra",hi:"rudder",init(){tut.mem.h0=boat.h;},
- txt:"Le <b>frecce sinistra e destra</b> muovono la barra, che <b>resta dove la lasci</b>: non torna al centro da sola. Sull'indicatore TIMONE il segno chiaro è dove l'hai messa, quello pieno è dove è arrivata la pala. <b>Spazio</b> la rimette dritta.",
+ txt:"Le <b>frecce sinistra e destra</b> muovono la barra, che <b>resta dove la lasci</b>: non torna al centro da sola. Sull'indicatore TIMONE il segno chiaro è dove l'hai messa, quello pieno è dove è arrivata la pala. <b>Spazio</b> la rimette dritta. Per gli aggiustamenti piccoli ci sono <b>,</b> e <b>.</b>, cinque volte più fini: ci torniamo fra poco, perché sono la chiave per non combattere col timone.",
  goal:"Accosta finché la rotta è cambiata di 60°",
  ok:()=>Math.abs(norm(boat.h-tut.mem.h0))>60*D2R},
 
@@ -1812,7 +1856,7 @@ const TUT=[
       return tut.mem.used&&Math.abs(boat.beta)>65*D2R&&kn()>1.5;}},
 
 {ttl:"Il bilanciamento",hi:"balance",hold:6,
- txt:"La <b>randa</b> tira a poppavia del centro della barca e la fa <b>orzare</b>; il <b>fiocco</b> tira a prua e la fa <b>puggiare</b>. La barra dell'indicatore BILANCIAMENTO dice chi sta vincendo. Portala al centro cazzando o lascando una delle due, e la barca tiene la rotta da sola. È il vero motivo per cui in barca si toccano le scotte, non il timone.",
+ txt:"La <b>randa</b> tira a poppavia del centro della barca e la fa <b>orzare</b>; il <b>fiocco</b> tira a prua e la fa <b>puggiare</b>. La barra dell'indicatore BILANCIAMENTO dice chi sta vincendo. Portala al centro cazzando o lascando una delle due, e la barca tiene la rotta da sola. È il vero motivo per cui in barca si toccano le scotte, non il timone.<br><br>Quello che resta lo assorbe il <b>cavallino</b>: di bolina serve un quarto di barra tenuta ferma, e con <b>,</b> e <b>.</b> sposti il <i>neutro</i> lì. Da allora <b>Spazio</b> riporta la barra al cavallino, non al centro, quindi correggere una raffica non ti fa perdere la regolazione.",
  goal:"Naviga sopra i 3 nodi con bilanciamento neutro e barra quasi al centro, per 6 secondi",
  ok:()=>kn()>3&&Math.abs(boat.balance)<0.28&&Math.abs(boat.rudderCmd)<0.18},
 

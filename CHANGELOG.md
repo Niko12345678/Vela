@@ -10,6 +10,31 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
 ## Non rilasciato
 
 ### Aggiunto
+- **Cavallino sulla barra** (`,` `.` per regolarlo, **K** per prenderlo
+  dov'è la barra adesso). Il timone sembrava impossibile da regolare, e
+  misurando si è visto perché: per *non* cambiare rotta la barra va tenuta
+  **fuori dal centro** — 0,26 di barra tutta di bolina con 14 nodi, 0,40
+  con 24 — mentre le frecce vanno a 1,15 al secondo, cioè quel valore si
+  centra tenendo premuto per 226 millisecondi a occhio, senza nessun
+  numero che dica dove sei. E bastava una correzione per perderlo.
+  Ora `,` e `.` spostano il **neutro** della barra cinque volte più fine
+  delle frecce, portandosi dietro la barra; **Spazio** riporta al
+  cavallino invece che al centro, quindi correggere una raffica non
+  cancella più la regolazione; **Maiusc+Spazio** azzera tutto. Il richiamo
+  al centro (governo 1) torna anch'esso al cavallino.
+  Misurato: di bolina, un minuto a mani ferme, la prua deriva di **7°**
+  col cavallino contro **38,8°** senza.
+  Il cavallino **non tocca la fisica** — è solo il punto a cui tornano i
+  comandi, `physics()` non sa che esista — quindi la golden test resta
+  intatta.
+- L'indicatore è persistente, riga **CAVALLINO** in accento col valore,
+  più un segno arancione sotto la scala del timone: un neutro spostato di
+  nascosto sarebbe stato lo stesso inganno già corretto per la regolazione
+  automatica delle vele.
+- `test/timone.test.js`: verifica che il problema esista davvero (di
+  bolina serve barra fuori centro, e di più col vento fresco), che il
+  cavallino lo risolva, che sia più fine delle frecce e che le frecce non
+  lo tocchino.
 - **Selettore della barca nel menù**: quattro scafi invece di uno. Finché
   `K` è stato un letterale dentro `game.js`, "la barca" e "la simulazione"
   erano la stessa cosa e ogni idea di progressione — o anche solo di
