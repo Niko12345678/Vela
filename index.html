@@ -127,6 +127,7 @@
   <label>Ritmo <select id="tscale"><option value="1">1×</option><option value="1.5">1,5×</option><option value="2" selected>2×</option><option value="3">3×</option><option value="4">4×</option><option value="6">6×</option></select></label>
   <label>Tratteggi <input id="vis" type="range" min="0" max="1.6" step="0.1" value="1"></label>
   <label>Mappa <select id="mapsel"><option value="ionio" selected>Mar Ionio</option><option value="rnd">Casuale</option></select></label>
+  <label>Barca <select id="boatsel"></select></label>
   <label>Partenza <select id="port"></select></label>
   <label>Seme <input id="seed" type="text" value="mantova"></label>
   <label><input id="easy" type="checkbox" checked> Mare facile</label>
@@ -194,7 +195,7 @@
 <div id="help">
   <div id="helpbox">
     <h1>Vela</h1>
-    <div class="sub">Simulatore di navigazione a vela · sloop 11 m, randa e fiocco</div>
+    <div class="sub">Simulatore di navigazione a vela · quattro barche, dal gozzo al cutter</div>
     <h2>Comandi</h2>
     <table>
       <tr><td><kbd>←</kbd> <kbd>→</kbd> / <kbd>A</kbd> <kbd>D</kbd></td><td>Barra del timone — resta dove la lasci</td></tr>
@@ -235,8 +236,14 @@
     <h2>Se ti pianti nel vento</h2>
     <p>Succede a tutti: la barca sale verso il vento, le vele sbattono, perdi velocità e il timone non morde più. Sei <strong>in panne</strong>, e da fermo il timone non serve a niente.</p>
     <p>La manovra vera è una: <strong>fiocco a collo</strong> con <kbd>B</kbd>. Il fiocco viene tenuto dal lato sbagliato, il vento lo spinge e fa cadere la prua sottovento. Dopo una decina di secondi riprendi velocità e il fiocco si libera da solo. Aiuta anche lascare la randa mentre lo fai.</p>
+    <h2>La flotta</h2>
+    <p>Nel menù in alto, <strong>Barca</strong> cambia lo scafo. Non sono la stessa barca con numeri diversi: cambiano superficie velica, dislocamento, deriva, timone, pescaggio e mani di terzaroli disponibili, quindi cambia il modo di governarle. Cambiare barca riporta al via.</p>
+    <p><strong>Gozzo a vela latina</strong> (6,5 m) — accelera e si ferma in tre secondi, vira su una moneta, ma la deriva quasi non c'è: di bolina <em>scarroccia</em> il doppio dello sloop, cioè scivola di lato invece di guadagnare terreno. Una sola mano di terzaroli e niente spinnaker: sopra i 15 nodi diventa una faccenda seria. Pesca 90 cm, quindi entra dove le altre toccano.</p>
+    <p><strong>Sloop 11 m</strong> — la barca di riferimento, equilibrata e tollerante. Tre mani di terzaroli, spinnaker, e la rotta la tiene da sola se bilanci le vele.</p>
+    <p><strong>Dodici da regata</strong> — la più veloce e la più esigente: punta altissimo e accelera in poco più di un secondo, ma è tenera. Sopra i 25 nodi si corica al punto che perde terreno contro il cutter, e il bilanciamento va tenuto d'occhio in continuazione.</p>
+    <p><strong>Cutter 15 m</strong> — pesante e lentissimo a rispondere: una virata da bolina gli costa quasi un minuto, contro i nove secondi dello sloop. Con poco vento è fiacco. Ma dai 25 nodi in su non lo ferma niente, quasi non scarroccia e sbanda pochissimo: è la barca delle tratte lunghe. Pesca 3,8 m, quindi certe cale restano fuori portata.</p>
     <h2>Vento forte</h2>
-    <p>Oltre i 20 nodi la barca è sovrainvelata: sbanda troppo, straorza e il timone perde presa. Non è un difetto, è il segnale che devi <strong>ridurre la tela</strong>. <kbd>X</kbd> prende una mano di terzaroli sulla randa (66% della superficie, poi 44%), <kbd>F</kbd> avvolge il fiocco. Si va meno forte ma si torna a governare — e spesso, riducendo, si va perfino <em>più</em> forte, perché la barca smette di coricarsi e di frenare col timone.</p>
+    <p>Oltre i 20 nodi la barca è sovrainvelata: sbanda troppo, straorza e il timone perde presa. Non è un difetto, è il segnale che devi <strong>ridurre la tela</strong>. <kbd>X</kbd> prende una mano di terzaroli sulla randa (sullo sloop 66% della superficie, poi 44%; le altre barche hanno mani diverse), <kbd>F</kbd> avvolge il fiocco. Si va meno forte ma si torna a governare — e spesso, riducendo, si va perfino <em>più</em> forte, perché la barca smette di coricarsi e di frenare col timone.</p>
     <h2>Lo spinnaker</h2>
     <p>Scappando davanti al vento te ne porti via una parte: al gran lasco il vento apparente scende da 7,5 a 5,5 m/s, e siccome la forza va col quadrato della velocità la pressione sulle vele quasi si dimezza. Per questo alle andature portanti la velocità non sale come ti aspetteresti: <strong>hai le vele sbagliate</strong>, non un problema di regolazione.</p>
     <p><kbd>G</kbd> issa lo <strong>spinnaker</strong>, tre volte più grande del fiocco e molto meno coperto dalla randa. Si regola con gli stessi tasti <kbd>Q</kbd> <kbd>E</kbd>. Vale dai 110° di vento reale in poi: sotto i 66° apparenti si sgonfia, diventa pallido e sbatte, e devi poggiare o ammainarlo.</p>

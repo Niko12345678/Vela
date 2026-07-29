@@ -9,51 +9,52 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
 
 ## Non rilasciato
 
-### Corretto
-- Regolazione vele AUTOMATICA (tasto **T**): premerlo la disinserisce di
-  nascosto, senza nessun segnale persistente — solo un avviso che sparisce
-  in un paio di secondi — mentre l'AUTOTIMONIERE ha sempre avuto la sua
-  riga fissa nel pannello. Risultato: frecce, QE e rotella sembravano non
-  rispondere più alle vele, senza modo di capire perché. Ora, finché
-  `game.auto` resta attivo, RANDA e FIOCCO mostrano al posto dello stato
-  normale "AUTOMATICA — T TORNA AL MANUALE" in accento, sempre visibile
-  come per l'autotimoniere.
+### Aggiunto
+- **Selettore della barca nel menù**: quattro scafi invece di uno. Finché
+  `K` è stato un letterale dentro `game.js`, "la barca" e "la simulazione"
+  erano la stessa cosa e ogni idea di progressione — o anche solo di
+  provare un altro scafo — era impossibile senza toccare la fisica. Ora la
+  flotta sta in `src/data/barche.json`, `setBarca()` la scambia e il gioco
+  resta identico a prima finché non cambi barca.
+  - **Gozzo a vela latina** (6,5 m): scarroccia il 21,7° di bolina contro
+    i 12,7° dello sloop, prende lo spunto in 2,2 s invece di 2,9, vira in
+    14 s. Una sola mano di terzaroli, niente spinnaker, pesca 90 cm.
+  - **Sloop 11 m**: la barca di sempre, numeri **invariati**. Resta il
+    riferimento della golden test.
+  - **Dodici da regata**: punta a 5,0 nodi contro 3,4, accelera in 1,2 s,
+    ma è tenera — con 31 nodi si corica al punto di perdere contro il
+    cutter (10,1 contro 10,4 nodi).
+  - **Cutter 15 m**: con 6 nodi di vento non batte lo sloop, con 31 lo
+    stacca del 20%. Una virata di 90° gli costa 52 s contro i 9 dello
+    sloop. Pesca 3,8 m.
+  I numeri non sono stati indovinati: sono usciti da quattro giri di
+  misura con `steady()` sulla harness. Il primo tentativo aveva un cutter
+  che **non riusciva a virare** — orzava nel vento prima di prendere
+  abbrivio e restava in panne a 0,27 nodi — risolto spostando il centro
+  velico a proravia, che per un cutter è anche la cosa fisicamente giusta.
+- `test/barche.test.js`: collauda il **carattere** di ogni scafo sempre in
+  rapporto allo sloop (chi scarroccia di più, chi accelera prima, chi non
+  vira), mai in numeri assoluti, così la taratura resta libera finché la
+  storia della barca resta quella dichiarata. Più un controllo che ogni
+  barca abbia tutte le costanti che la fisica legge: una che manca non
+  esplode, si propaga come NaN e la barca sparisce dallo schermo in
+  silenzio.
 
 ### Cambiato
-- La carta del Ionio viene ora da `src/data/ionian.json` invece che dal
-  letterale `IONIO` incorporato in `game.js` (~75 KB, il 40% del file):
-  finché il gioco leggeva una copia congelata, rigenerare le carte non
-  serviva a niente e aggiungere un'area era impossibile. `game.js` non può
-  importarla da sé — la harness lo esegue in una `new Function`, dove
-  `import` è errore di sintassi — quindi gliela mette su `globalThis`
-  l'host: `src/data/carte.js` nel browser, la harness nei test.
-  **Il gioco cambia**: la partenza si sposta da `{1544,-4125}` a
-  `{670,-3873}` (porto più vicino Spartochori invece di Vathy Meganisi) e
-  i porti passano da 16 a 17, perché il JSON è una generazione più recente
-  del letterale. Le soglie della golden test reggono senza ritocchi.
-- Le istruzioni per Claude Code sono ora un albero: `CLAUDE.md` in radice
-  tiene solo comandi e regole non negoziabili, il resto sta in
-  `.claude/rules/` con `paths:` e in `src/legacy/CLAUDE.md`, che si
-  caricano solo quando si lavora sui file a cui si riferiscono. Gli
-  `@import` sono stati evitati di proposito: espandono il file in contesto
-  all'avvio, quindi non risparmiano token.
-- Il repository è un albero di lavoro normale: i file erano dentro
-  `vela-repo.tar.gz` e in radice non c'era nemmeno un `package.json`,
-  quindi niente `npm test`, niente diff leggibili, niente CI sul codice
-  vero.
+- Tre valori scritti a mano dentro `physics()` sono diventati parametri
+  della barca, **a comportamento identico** per lo sloop (golden test
+  verde prima e dopo): la rigidezza `K.STIFF` — il `9000` che era ripetuto
+  sia in `physics` sia in `polarSpeed` — il `K.PESCAGGIO` al posto della
+  soglia di incaglio fissa a `-2`, e le mani di terzaroli, che ora sono
+  `K.REEF.length` invece del `3` cablato nel tasto **X**.
+- `askConfirm()` accetta una richiamata anche per l'annullamento: senza,
+  annullando il cambio barca il menù restava a indicare uno scafo che non
+  era quello al timone.
+- Il tutorial riporta sulla barca base prima di cominciare: apre dicendo
+  "undici metri, randa e fiocco" e ha un passo che chiede di issare lo
+  spinnaker, quindi sul gozzo mentiva alla prima riga e diventava
+  impossibile all'undicesima.
 
-### Aggiunto
-- Questo diario, e la regola di tenerlo aggiornato a ogni modifica.
-- `docs/refactoring.md` con i numeri della deriva fra il letterale `IONIO`
-  e `src/data/ionian.json`: decide come va fatto il primo passo del
-  refactoring, perché sposta il punto di partenza e tocca la golden test.
+---
 
-### Rimosso
-- `vela-repo.tar.gz`, che duplicava ogni file versionato e sarebbe andato
-  subito alla deriva. Recuperabile da `05c5ff7`.
-- Il `deploy.yml` di radice, copia esatta di
-  `.github/workflows/deploy.yml`, tenuta lì solo perché il trascinamento
-  nel browser salta le cartelle nascoste.
-- `ISTRUZIONI-github.md` e `PROMPT-claude-code.md`: descrivevano il
-  caricamento a mano dell'archivio dall'interfaccia web, flusso che non
-  esiste più.
+Le voci precedenti sono in [`docs/changelog/2026-07.md`](docs/changelog/2026-07.md).

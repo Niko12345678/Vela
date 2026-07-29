@@ -16,23 +16,33 @@ function hashStr(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCo
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
 
 /* ══════════════════ costanti fisiche ══════════════════ */
-const K={
-  SAIL_MAIN:12,   // ½·ρ·superficie randa
-  REEF:[1,0.66,0.44],         // mani di terzaroli: si riduce la randa col vento forte
-  SAIL_JIB:7,     // ½·ρ·superficie fiocco
-  SAIL_SPI:19,    // ½·ρ·superficie spinnaker: enorme, ma solo alle andature portanti
-  CLmax:1.55, CD0:0.10, CDmax:1.35,
-  MASS:3400,                 // dislocamento realistico: dà abbrivio, non cambia il regime
-  HULL_F:85, LIN_F:60,        // resistenza longitudinale scafo
-  HULL_L:4200, LIN_L:2200,    // deriva: resistenza laterale
-  RUDDER:0.080,               // efficacia timone
-  VHULL:5.0, WAVE:12,        // resistenza d'onda vicino alla velocità critica dello scafo
-  YAWTAU:1.05,                // inerzia di rotazione: la barca non gira all'istante
-  YAW:5.0e-4,                 // conversione forza laterale -> momento di imbardata
-  ARM_M:1.00, ARM_J:1.20,     // bracci: randa a poppavia, fiocco a proravia del centro di deriva
-  LOA:11,                     // lunghezza fuori tutto (m)
-};
+/* `K` sono i parametri di UNA barca, e si scambiano con setBarca(): la
+   flotta sta in src/data/barche.json, che l'host carica prima del gioco —
+   src/main.js nel browser, la harness nei test. Il glossario delle
+   costanti è in src/data/barche.js.
+
+   `crociera11` è la barca di riferimento: è quella che la golden test
+   collauda, ed è il valore di partenza. Cambiare i suoi numeri significa
+   cambiare il contratto della simulazione.                              */
+const FLOTTA=globalThis.VELA_BARCHE;
+if(!FLOTTA||!FLOTTA.barche) throw new Error("flotta non caricata: manca globalThis.VELA_BARCHE");
+const BARCA_BASE="crociera11";
+let barcaId=BARCA_BASE;
+let K=FLOTTA.barche[BARCA_BASE].k;
 let MARK_R=45;
+
+/* Scambia la barca. Il corredo cambia con lo scafo, quindi lo stato che
+   non ha più senso va riportato a posto: i terzaroli oltre le mani
+   disponibili, e lo spinnaker su una barca che non ce l'ha.            */
+function setBarca(id){
+  if(!FLOTTA.barche[id]) return false;
+  barcaId=id; K=FLOTTA.barche[id].k;
+  boat.reef=Math.min(boat.reef,K.REEF.length-1);
+  if(!K.SAIL_SPI&&boat.spi){boat.spi=false;boat.jibFurled=false;}
+  boat.jib=clamp(boat.jib,0,boat.spi?90*D2R:80*D2R);
+  return true;
+}
+function barcaCorrente(){ return FLOTTA.barche[barcaId]; }
 
 /* ══════════════════ mondo procedurale ══════════════════ */
 /* Coste reali del Mar Ionio (Natural Earth 10m, interpolate con spline).
@@ -309,7 +319,7 @@ function polarSpeed(twaDeg,wind){
     const lat=c=>c.CL*Math.cos(ab)+c.CD*Math.sin(ab);
     let Ff=q*(K.SAIL_MAIN*drv(cm)+K.SAIL_JIB*je*drv(cj));
     let Fl=-sg*q*(K.SAIL_MAIN*lat(cm)+K.SAIL_JIB*je*lat(cj));
-    const spill=1-0.35*Math.pow(clamp(Math.abs(Fl)/9000,0,1),2);   // sbandamento che sfoga
+    const spill=1-0.35*Math.pow(clamp(Math.abs(Fl)/K.STIFF,0,1),2);   // sbandamento che sfoga
     Ff*=spill; Fl*=spill;
     let lo=0,hi=9;
     for(let k=0;k<34;k++){
@@ -417,8 +427,8 @@ function physics(dt){
   const Tm=Fm.l*K.ARM_M, Tj=Fj.l*K.ARM_J;
   boat.balance=clamp((Tj-Tm)*sgn/(Math.abs(Tm)+Math.abs(Tj)+40),-1,1);
 
-  const heelT=clamp(Math.abs(Fl)/9000,0,1);
-  boat.heel=lerp(boat.heel,clamp(Fl/9000,-1,1),1-Math.exp(-3*dt));
+  const heelT=clamp(Math.abs(Fl)/K.STIFF,0,1);
+  boat.heel=lerp(boat.heel,clamp(Fl/K.STIFF,-1,1),1-Math.exp(-3*dt));
   const spill=1-0.35*heelT*heelT;                            // troppo sbandata = vento sfogato
   Ff*=spill; Fl*=spill;
 
@@ -469,10 +479,10 @@ function physics(dt){
 
   // ─ collisione con la terra
   const dep=landDepth(world.islands,boat.x,boat.y);
-  if(dep>-2){
+  if(dep>-K.PESCAGGIO){
     const nv=seaward(world.islands,boat.x,boat.y);
     const nx=nv.x, ny=nv.y;
-    boat.x+=nx*(dep+2)*Math.min(1,dt*10); boat.y+=ny*(dep+2)*Math.min(1,dt*10);
+    boat.x+=nx*(dep+K.PESCAGGIO)*Math.min(1,dt*10); boat.y+=ny*(dep+K.PESCAGGIO)*Math.min(1,dt*10);
     const into=boat.vx*nx+boat.vy*ny;
     if(into<0){boat.vx-=into*nx*1.6;boat.vy-=into*ny*1.6;}
     const kd=Math.exp(-2.2*dt); boat.vx*=kd; boat.vy*=kd;   // attrito sul fondo, indipendente dal passo
@@ -607,11 +617,12 @@ addEventListener("keydown",e=>{
   if(k==="r")askConfirm("Riportare la barca al via? La regata in corso e il cronometro ripartono da zero.",resetBoat);
   if(k==="z")cyclePilot();
   if(k==="x"){
-    boat.reef=(boat.reef+1)%3;
+    boat.reef=(boat.reef+1)%K.REEF.length;
     say(boat.reef?("Randa terzarolata: "+boat.reef+"ª mano, superficie al "+Math.round(K.REEF[boat.reef]*100)+"%")
                  :"Randa a tutto ferro");
   }
   if(k==="g"){
+    if(!K.SAIL_SPI){say(barcaCorrente().nome+": niente spinnaker a bordo");return;}
     boat.spi=!boat.spi;boat.jibBack=false;
     if(boat.spi){boat.jibFurled=true;boat.jib=clamp(boat.jib,30*D2R,90*D2R);
       say("Spinnaker a riva — vale solo alle andature portanti");}
@@ -1297,17 +1308,44 @@ portEl.onchange=e=>{
   else startFrom(i);
 };
 
+/* Flotta: la barca si sceglie dal menù. Cambiare scafo rimette al via,
+   perché corredo e stato delle vele appartengono alla barca. */
+const boatEl=document.getElementById("boatsel");
+function fillBarche(){
+  boatEl.innerHTML="";
+  for(const id of FLOTTA.ordine){
+    const b=FLOTTA.barche[id]; if(!b) continue;
+    const op=document.createElement("option");
+    op.value=id;op.textContent=b.nome;op.title=b.sommario;
+    if(id===barcaId)op.selected=true;
+    boatEl.appendChild(op);
+  }
+}
+function cambiaBarca(id){
+  if(!setBarca(id)){boatEl.value=barcaId;return;}
+  resetBoat();
+  say(barcaCorrente().nome+" — "+barcaCorrente().sommario);
+}
+boatEl.onchange=e=>{
+  const id=e.target.value;e.target.blur();
+  if(id===barcaId)return;
+  if(game.started&&!game.done)
+    askConfirm("Passare a "+FLOTTA.barche[id].nome+"? La regata in corso e il cronometro ripartono da zero.",
+      ()=>cambiaBarca(id),()=>{boatEl.value=barcaId;});   // annullando, il menù torna alla barca vera
+  else cambiaBarca(id);
+};
+
 const askEl=document.getElementById("ask");
-let askCb=null;
-function askConfirm(msg,cb){
+let askCb=null, askNoCb=null;
+function askConfirm(msg,cb,no){
   document.getElementById("asktxt").textContent=msg;
-  askCb=cb;askEl.classList.add("on");
+  askCb=cb;askNoCb=no||null;askEl.classList.add("on");
   for(const k in keys)keys[k]=0;                  // niente tasti rimasti premuti
 }
 function askClose(yes){
   askEl.classList.remove("on");
-  const c=askCb;askCb=null;
-  if(yes&&c)c();
+  const c=askCb, n=askNoCb; askCb=null; askNoCb=null;
+  if(yes){ if(c)c(); } else if(n) n();
 }
 document.getElementById("askyes").onclick=e=>{e.currentTarget.blur();askClose(true);};
 document.getElementById("askno").onclick=e=>{e.currentTarget.blur();askClose(false);};
@@ -1818,7 +1856,12 @@ function tutRender(){
 function tutStart(){
   tut.on=true;tut.i=0;tut.hold=0;tut.mem={};tut.t=0;
   game.auto=false;game.pilot=0;
+  // Il tutorial parla della barca di riferimento: dice "undici metri" e ha
+  // un passo sullo spinnaker, che sul gozzo non esiste. Ci si torna sopra.
+  const cambiata=barcaId!==BARCA_BASE;
+  if(cambiata){setBarca(BARCA_BASE);if(boatEl)boatEl.value=BARCA_BASE;}
   resetBoat();
+  if(cambiata)say("Tutorial: si torna sullo "+barcaCorrente().nome);
   tutEl.classList.add("on");tutRender();
 }
 function tutNext(){
@@ -1863,6 +1906,7 @@ document.getElementById("tutquit").onclick=e=>{e.currentTarget.blur();tutQuit();
 document.getElementById("tutb").onclick=e=>{e.currentTarget.blur();tutStart();};
 
 /* ══════════════════ loop ══════════════════ */
+fillBarche();
 newWorld("mantova");
 loadLog();
 helpEl.classList.add("on");
