@@ -10,6 +10,34 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
 ## Non rilasciato
 
 ### Aggiunto
+- **Passo delle rotelle regolabile** (menù in alto, da `1×` a `1/10`) e
+  **barra del timone con Alt + rotella**. Uno scatto di rotella valeva 6°
+  di scotta, sempre: comodo per lascare tutto in poppa, inservibile per
+  cercare l'ottimo, perché la fascia verde di bolina è larga ~4° e ogni
+  scatto la scavalca. Ora il passo scelto scala tutto quello che si regola
+  con la rotella — scotte, barra, cavallino, rotta impostata — e a `1/10`
+  uno scatto vale **0,6°**, cioè si posa il segno bianco dentro il verde
+  senza rincorrerlo. Lo zoom della carta non è toccato: lì la rotella
+  serve a un'altra cosa.
+  Il timone, che si governava solo a tastiera, risponde a
+  **Alt + rotella** (in giù a dritta) o al **tasto destro tenuto premuto**
+  mentre si gira la rotella, per governare con una mano sola — da cui la
+  soppressione del menù contestuale sul solo canvas, altrimenti il
+  browser lo apre sopra il mare. **Alt + Maiusc + rotella** muove il
+  cavallino, e con l'autotimoniere su *ROTTA* lo stesso gesto sposta la
+  rotta impostata di 5° per scatto a passo pieno. Tenere premuta una
+  freccia per centrare 0,26 di barra era il gesto sbagliato per un
+  comando di precisione: la rotella si posa su un valore e lo lascia lì.
+  A differenza delle scotte il timone risponde **anche a vele
+  automatiche** (`T`): quella assistenza riguarda le vele, non il governo.
+- `test/rotelle.test.js`: il passo scala davvero (e in proporzione su
+  scotte e barra), Alt non tocca le scotte e la rotella nuda non tocca la
+  barra, il tasto destro premuto vale come Alt, il cavallino resta cinque
+  volte più fine della barra, con
+  l'autotimoniere inserito si muove la rotta e non la barra, la carta ha
+  la precedenza e le rotelle invertite invertono anche il timone. Per
+  renderlo collaudabile il corpo dell'ascoltatore `wheel` è diventato la
+  funzione `rotella(e)`: la harness non può recapitare eventi.
 - **Cavallino sulla barra** (`,` `.` per regolarlo, **K** per prenderlo
   dov'è la barra adesso). Il timone sembrava impossibile da regolare, e
   misurando si è visto perché: per *non* cambiare rotta la barra va tenuta
