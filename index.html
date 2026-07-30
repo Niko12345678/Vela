@@ -108,7 +108,9 @@
     border-radius:3px;padding:1px 6px;font:inherit;font-size:11px}
   #helpbox table{border-collapse:collapse;width:100%}
   #helpbox td{padding:3px 0;vertical-align:top}
-  #helpbox td:first-child{width:170px;white-space:nowrap}
+  /* nowrap + larghezza fissa: senza il margine a destra le righe lunghe
+     (Alt+Maiusc+rotella) si incollano alla colonna della spiegazione */
+  #helpbox td:first-child{width:170px;white-space:nowrap;padding-right:14px}
   #helpbox p{margin:6px 0;color:#ded3ba}
 
   #touch{position:absolute;bottom:0;left:0;right:0;height:0;z-index:4;display:none}
@@ -131,6 +133,7 @@
   <label>Partenza <select id="port"></select></label>
   <label>Seme <input id="seed" type="text" value="mantova"></label>
   <label><input id="easy" type="checkbox" checked> Mare facile</label>
+  <label>Passo rotelle <select id="wstep"><option value="1" selected>1×</option><option value="0.5">1/2</option><option value="0.2">1/5</option><option value="0.1">1/10</option></select></label>
   <label><input id="winv" type="checkbox"> Rotelle invertite</label>
   <button id="tutb">Tutorial</button>
   <button id="gen">Nuova mappa</button>
@@ -210,6 +213,9 @@
       <tr><td><kbd>Shift</kbd> + <kbd>↑</kbd><kbd>↓</kbd></td><td>Muove le due scotte insieme</td></tr>
       <tr><td>Rotella verticale</td><td>Randa · in su cazza, in giù lasca</td></tr>
       <tr><td>Rotella orizzontale</td><td>Fiocco (o spinnaker) · a sinistra cazza</td></tr>
+      <tr><td><kbd>Alt</kbd> + rotella<br>o tasto destro premuto</td><td><strong>Barra del timone</strong> · in giù a dritta, in su a sinistra (con l'autotimoniere su ROTTA sposta la rotta impostata)</td></tr>
+      <tr><td><kbd>Alt</kbd> + <kbd>Maiusc</kbd> + rotella</td><td><strong>Cavallino</strong> · cinque volte più fine della barra</td></tr>
+      <tr><td><em>Passo rotelle</em> (menù)</td><td>Quanto vale uno scatto: da 1× a 1/10 per la regolazione fine</td></tr>
       <tr><td><kbd>Ctrl</kbd> + rotella</td><td>Zoom della carta</td></tr>
       <tr><td><kbd>Z</kbd></td><td>Governo: richiamo al centro → rotta → vento → barra libera</td></tr>
       <tr><td><kbd>Spazio</kbd></td><td>Barra al cavallino, autotimoniere disinserito · <kbd>Maiusc</kbd>+<kbd>Spazio</kbd> azzera anche il cavallino</td></tr>
@@ -242,6 +248,7 @@
     <p>Per <em>non</em> cambiare rotta la barra quasi mai sta al centro. Di bolina con 14 nodi ne serve un quarto tenuta ferma, con 24 nodi quasi metà: è la randa che tira a poppavia e fa orzare. Cercare quel punto con le sole frecce è un supplizio, perché vanno troppo veloci per centrarlo e dopo ogni correzione l'hai perso.</p>
     <p>Il <strong>cavallino</strong> è il neutro della barra. <kbd>,</kbd> e <kbd>.</kbd> lo spostano cinque volte più fine delle frecce, e la barra ci va insieme: trovi il punto in cui la prua sta ferma e lo lasci lì. Da quel momento <kbd>Spazio</kbd> non riporta la barra al centro ma <em>al cavallino</em>, quindi correggere una raffica con le frecce non ti fa più perdere la regolazione. Se hai già trovato il punto a mano, <kbd>K</kbd> lo memorizza dov'è. Finché è inserito, il pannello mostra la riga <span style="color:var(--accent)">CAVALLINO</span> con il valore, e c'è un segno arancione sotto la scala del timone.</p>
     <p>Attenzione a cosa risolve e cosa no: il cavallino toglie lo <em>scarto fisso</em>, ed è di bolina che fa la differenza — la prua resta lì. Alle andature larghe la barca tende comunque a divagare, perché più orza più le serve barra, e nessun neutro fisso può inseguire quello. Lì la risposta è l'<strong>autotimoniere</strong>: <kbd>Z</kbd> fino a <strong>ROTTA</strong> mantiene la direzione bussola da solo, e con le frecce sposti la rotta impostata invece della barra.</p>
+    <p>Anche la barra si governa con la <strong>rotella</strong>, tenendo premuto <kbd>Alt</kbd> oppure il <strong>tasto destro</strong> del mouse: in giù a dritta, in su a sinistra. È il modo di posarla su un valore preciso e lasciarla lì, invece di inseguirlo tenendo premuta una freccia. Con <kbd>Alt</kbd>+<kbd>Maiusc</kbd> muovi il cavallino, cinque volte più fine, e con l'autotimoniere su <strong>ROTTA</strong> lo stesso <kbd>Alt</kbd>+rotella sposta la rotta impostata di pochi gradi per volta.</p>
     <p>La soluzione da marinaio, però, è una terza: <strong>bilancia le vele</strong>. Lascare un po' la randa o cazzare il fiocco sposta la spinta a proravia e la barca smette di orzare da sé. Guarda l'indicatore BILANCIAMENTO — portalo al centro e di barra non ne serve quasi più.</p>
     <h2>La flotta</h2>
     <p>Nel menù in alto, <strong>Barca</strong> cambia lo scafo. Non sono la stessa barca con numeri diversi: cambiano superficie velica, dislocamento, deriva, timone, pescaggio e mani di terzaroli disponibili, quindi cambia il modo di governarle. Cambiare barca riporta al via.</p>
@@ -261,6 +268,7 @@
     <p>Randa e fiocco tirano su due punti diversi. La <strong>randa</strong>, a poppavia dell'albero, fa <strong>orzare</strong> (girare verso il vento). Il <strong>fiocco</strong>, a prua, fa <strong>puggiare</strong>. L'indicatore <em>BILANCIAMENTO</em> ti dice chi sta vincendo: portalo al centro e la barca tiene la rotta praticamente da sola, senza toccare il timone.</p>
     <p>Attenzione: la regolazione più veloce non è quella più equilibrata. Al traverso la regolazione da velocità massima fa orzare di 60° in un minuto a barra libera; quella bilanciata perde due decimi di nodo ma tiene la rotta entro 10°.</p>
     <p>Avvolgere il fiocco (<kbd>F</kbd>) toglie potenza ma sbilancia forte verso l'orza: se lo fai, lasca anche la randa.</p>
+    <p><em>Passo rotelle</em>, in alto, decide quanto vale uno scatto di rotella su tutto quello che si regola così — scotte, barra, cavallino, rotta impostata. A <strong>1×</strong> uno scatto muove la scotta di ~6°, che va bene per lascare tutto in poppa e va male per cercare la fascia verde, larga pochi gradi: lì scegli <strong>1/5</strong> o <strong>1/10</strong> e uno scatto vale mezzo grado. Lo zoom della carta non ne è toccato, resta come prima.</p>
     <p><em>Mare facile</em>, in alto, attenua raffiche e squilibri. Toglilo quando ti senti a tuo agio.</p>
     <p><em>Ritmo</em>, da 1× a 6×, accelera lo scorrere del tempo: velocità, virate, raffiche e cronometro cambiano tutti insieme, quindi la barca si comporta esattamente allo stesso modo, solo che una traversata dura meno. Di serie è 2×.</p>
 <h2>La carta nautica</h2>

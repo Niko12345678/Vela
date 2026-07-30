@@ -701,12 +701,23 @@ function input(dt){
   }
 }
 /* Rotelle del mouse: verticale = randa, orizzontale = fiocco.
-   Funziona anche con lo scorrimento a due dita del trackpad.        */
-let wheelInv=false;
-addEventListener("wheel",e=>{
-  if(e.target&&e.target.closest&&e.target.closest("#settings,#help,#ask,#tut,#showm"))return;
-  if(helpEl.classList.contains("on")||askEl.classList.contains("on"))return;
-  e.preventDefault();
+   Con Alt — o col tasto destro tenuto premuto, per governare con una mano
+   sola — si muove invece la barra del timone.
+   Funziona anche con lo scorrimento a due dita del trackpad.
+
+   `wheelStep` è il passo di uno scatto, scelto nel menù: 1 è quello di
+   sempre (~6° di scotta per scatto), 0.1 è un decimo. Serve perché la
+   fascia verde dell'ottimo è larga pochi gradi e con lo scatto pieno la si
+   scavalca a ogni tentativo. Moltiplica tutto quello che si regola con la
+   rotella — scotte, barra, cavallino, rotta impostata — ma NON lo zoom.
+
+   Le costanti per scatto pieno (a 100 px di scatto, il valore usuale):
+   scotte 6°, barra 0,25 di corsa, cavallino 0,05 (un quinto della barra,
+   come `,` `.` stanno alle frecce), rotta impostata 5°.               */
+let wheelInv=false, wheelStep=1;
+const W_SCOTTA=0.06*D2R, W_BARRA=0.0025, W_CAVALLINO=0.0005, W_ROTTA=0.05*D2R;
+
+function rotella(e){
   const u=e.deltaMode===1?16:(e.deltaMode===2?400:1);      // righe o pagine -> pixel
   if(chart.on){                                            // sulla carta: zoom sul cursore
     const p=c2w(e.offsetX!==undefined?e.offsetX:VW/2,e.offsetY!==undefined?e.offsetY:VH/2);
@@ -719,16 +730,35 @@ addEventListener("wheel",e=>{
   if(e.ctrlKey){                                           // ctrl+rotella = zoom della carta
     game.zoom=clamp(game.zoom*Math.pow(0.9988,e.deltaY*u),1.1,9);return;
   }
-  if(game.paused||game.auto)return;
-  const k=0.06*D2R*(wheelInv?-1:1);
-  const dy=e.deltaY*u*k, dx=e.deltaX*u*k;
+  if(game.paused)return;
+  const s=e.deltaY*u*wheelStep*(wheelInv?-1:1);            // scatto normalizzato, in pixel
+  // Alt oppure il tasto destro tenuto premuto: `buttons` dice quali bottoni
+  // sono giù *durante* lo scatto, quindi non serve ricordarselo da soli
+  if(e.altKey||(e.buttons&2)){     // si governa, e vale anche a vele automatiche
+    if(!s)return;
+    if(game.pilot>=2) game.pilotTgt=norm(game.pilotTgt+s*W_ROTTA);   // sposta la rotta impostata
+    else if(e.shiftKey) setCavallino(boat.rudderTrim+s*W_CAVALLINO); // Alt+Maiusc = il neutro
+    else boat.rudderCmd=clamp(boat.rudderCmd+s*W_BARRA,-1,1);
+    return;
+  }
+  if(game.auto)return;
+  const dy=s*W_SCOTTA, dx=e.deltaX*u*wheelStep*(wheelInv?-1:1)*W_SCOTTA;
   const mx=boat.spi?90*D2R:80*D2R;
   if(dy){
     boat.trim=clamp(boat.trim+dy,0,90*D2R);
     if(e.shiftKey) boat.jib=clamp(boat.jib+dy,0,mx);       // shift: le due scotte insieme
   }
   if(dx) boat.jib=clamp(boat.jib+dx,0,mx);
+}
+addEventListener("wheel",e=>{
+  if(e.target&&e.target.closest&&e.target.closest("#settings,#help,#ask,#tut,#showm"))return;
+  if(helpEl.classList.contains("on")||askEl.classList.contains("on"))return;
+  e.preventDefault();
+  rotella(e);
 },{passive:false});
+// senza questo, il tasto destro usato come modificatore apre il menù del
+// browser sopra il mare; sui pannelli del menù resta invece disponibile
+addEventListener("contextmenu",e=>{ if(e.target&&e.target.id==="cv")e.preventDefault(); });
 
 if("ontouchstart" in window){
   document.body.classList.add("touch");
@@ -1429,6 +1459,13 @@ document.getElementById("tscale").onchange=e=>{timeScale=parseFloat(e.target.val
   say("Ritmo di gioco "+e.target.value.replace(".",",")+"×");};
 document.getElementById("vis").oninput=e=>{streakVis=parseFloat(e.target.value);};
 document.getElementById("winv").onchange=e=>{wheelInv=e.target.checked;e.target.blur();};
+document.getElementById("wstep").onchange=e=>{
+  wheelStep=parseFloat(e.target.value);e.target.blur();
+  // il conto è su uno scatto da 100 px, quello usuale: serve a dire cosa si è scelto
+  const gradi=(100*wheelStep*W_SCOTTA*R2D).toFixed(1).replace(".",",");
+  const passo=e.target.options[e.target.selectedIndex].textContent.trim();
+  say("Passo delle rotelle "+passo+" — uno scatto ≈ "+gradi+"° di scotta");
+};
 document.getElementById("easy").onchange=e=>{
   assist=e.target.checked?0.55:1;
   say(e.target.checked?"Mare facile — raffiche e squilibri attenuati":"Mare vero — raffiche piene");
@@ -1830,12 +1867,12 @@ const TUT=[
  txt:"I <b>tratteggi</b> sull'acqua scorrono nella direzione in cui soffia il vento: più sono lunghi e chiari, più è forte. Nella <b>rosa</b> in alto a destra la freccia arancione indica da dove viene, e il settore giallo è la zona in cui non puoi navigare. La rosa è orientata a prua: sta ferma la barchetta e gira il mondo."},
 
 {ttl:"La barra",hi:"rudder",init(){tut.mem.h0=boat.h;},
- txt:"Le <b>frecce sinistra e destra</b> muovono la barra, che <b>resta dove la lasci</b>: non torna al centro da sola. Sull'indicatore TIMONE il segno chiaro è dove l'hai messa, quello pieno è dove è arrivata la pala. <b>Spazio</b> la rimette dritta. Per gli aggiustamenti piccoli ci sono <b>,</b> e <b>.</b>, cinque volte più fini: ci torniamo fra poco, perché sono la chiave per non combattere col timone.",
+ txt:"Le <b>frecce sinistra e destra</b> muovono la barra, che <b>resta dove la lasci</b>: non torna al centro da sola. Sull'indicatore TIMONE il segno chiaro è dove l'hai messa, quello pieno è dove è arrivata la pala. <b>Spazio</b> la rimette dritta. Per gli aggiustamenti piccoli ci sono <b>,</b> e <b>.</b>, cinque volte più fini: ci torniamo fra poco, perché sono la chiave per non combattere col timone. Se preferisci il mouse, <b>Alt + rotella</b> — o il <b>tasto destro premuto</b> mentre giri la rotella — muove la barra e la lascia dov'è.",
  goal:"Accosta finché la rotta è cambiata di 60°",
  ok:()=>Math.abs(norm(boat.h-tut.mem.h0))>60*D2R},
 
 {ttl:"Regolare le vele",hi:"sails",hold:2.5,
- txt:"Le due barre in basso a sinistra sono la <b>posizione delle scotte</b>: tutta cazzata a sinistra, tutta lascata a destra. La <b>fascia verde</b> è dove la scotta dovrebbe stare adesso. Porta il segno bianco dentro il verde con <b>↑↓</b> per la randa e <b>Q E</b> per il fiocco. Guarda anche le vele: diventano bianche col bordo verde quando sono giuste.",
+ txt:"Le due barre in basso a sinistra sono la <b>posizione delle scotte</b>: tutta cazzata a sinistra, tutta lascata a destra. La <b>fascia verde</b> è dove la scotta dovrebbe stare adesso. Porta il segno bianco dentro il verde con <b>↑↓</b> per la randa e <b>Q E</b> per il fiocco. Guarda anche le vele: diventano bianche col bordo verde quando sono giuste. Anche la <b>rotella</b> le regola; se lo scatto ti sembra troppo grosso, nel menù in alto abbassa il <i>passo rotelle</i> a 1/5.",
  goal:"Tieni entrambe le vele nella fascia verde per 2 secondi",
  ok:()=>boat.stM==="ottima"&&(boat.stJ==="ottima"||boat.stJ==="aperta")},
 
