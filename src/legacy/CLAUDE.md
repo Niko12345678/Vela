@@ -1,11 +1,12 @@
 # `game.js` — il gioco ancora in un pezzo solo
 
-~1890 righe, sezioni separate da righe `══════`, nell'ordine: utilità →
+~2100 righe, sezioni separate da righe `══════`, nell'ordine: utilità →
 costanti `K` → mondo (`mkIsland`, `landDepth`, `buildShade`, `genWorld`) →
 stato (`boat`, `game`, vento) → fisica
 (`sailAero`, `aeroC`, `bestTrim`, `polarSpeed`, `trimWindows`, `physics`,
 `autopilot`) → tratteggi del vento → input → disegno → strumenti →
-interfaccia → carta nautica → giornale di bordo → tutorial → ciclo.
+interfaccia → rotta pianificata → carta nautica → giornale di bordo →
+tutorial → ciclo.
 
 Quattro cose da sapere prima di toccarlo:
 
