@@ -10,6 +10,47 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
 ## Non rilasciato
 
 ### Aggiunto
+- **Rotta pianificata: si traccia sulla carta e resta tratteggiata in mare.**
+  La carta nautica serviva solo a guardare: si leggeva rilevamento e
+  distanza col cursore, si mandava a memoria "175° per due miglia e mezzo",
+  si chiudeva la carta e da lì in poi si navigava a naso, perché in mare
+  non c'era più niente che dicesse dove si voleva passare. Ora ogni click
+  sul mare segna un **punto di rotta**: i punti fanno una spezzata
+  numerata, ogni tratta porta scritti accanto **rilevamento e miglia** — i
+  due numeri che si scrivono a matita sulla carta vera — e chiudendo la
+  carta la linea **resta tratteggiata sull'acqua**, con la tratta in corso
+  piena, quelle già fatte spente e il cerchio di passaggio attorno al punto
+  attivo. Un punto conta per girato quando ci si passa entro 70 m e
+  l'indice avanza da sé.
+  In plancia il pannello **ROTTA** dà punto corrente, rilevamento e
+  distanza del prossimo, e soprattutto lo **scarto**: quanti metri veri si
+  è fuori dalla congiungente, e da che parte. È il numero che distingue il
+  seguire la linea dal puntare al punto — con lo scarroccio si arriva lo
+  stesso, ma passando dove non si erano guardati i fondali. Per averlo
+  anche sulla prima tratta, quella in cui si esce dal porto, la tratta
+  ricorda da dove è cominciata (`piano.da`) invece di pretendere un punto
+  precedente.
+  Non governa niente: nessun autotimoniere, nessuna forza, `physics()` non
+  sa che esista, quindi la golden test è intatta. Il piano di rotta si
+  chiama `piano` e non `rotta` perché in tutto il resto del file *rotta* è
+  la direzione della prua, e due cose diverse con lo stesso nome nello
+  stesso ambito sono un errore che aspetta — se ne è avuta la prova
+  subito: una sonda di collaudo aveva già una variabile `rotta`.
+  Sulla carta il click deve convivere col trascinamento, quindi vale come
+  click solo se il tasto si lascia entro 5 px da dove è stato premuto; la
+  tolleranza per riconoscere "hai cliccato *quel* punto" è di 12 px sullo
+  schermo a qualunque ingrandimento, perché in metri di mare sarebbe
+  irraggiungibile da lontano e grande come mezzo golfo da vicino.
+  La rotta sopravvive al ritorno al via — è un disegno del marinaio, non
+  uno stato della barca — ma riparte dal primo punto; cambiare carta la
+  cancella.
+- `test/rotta.test.js`: un click segna e un click sopra toglie, la
+  tolleranza è in pixel e non in metri, un punto è passato solo entrandogli
+  dentro e la tratta riparte da lì, lo scarto ha segno giusto (a dritta
+  positivo) e vale zero sulla linea, togliere un punto già passato non
+  cambia dove si sta andando, la rotta sopravvive al reset e non al cambio
+  di carta, e un giro completo con la rotta disegnata — mare e carta — non
+  produce NaN.
 - **Doppio click del tasto destro: barra dritta.** Il tasto destro era già
   il modificatore del timone — tenuto premuto si governa con la rotella —
   ma per raddrizzare bisognava tornare alla tastiera e cercare **Spazio**,

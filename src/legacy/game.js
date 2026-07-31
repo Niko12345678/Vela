@@ -208,12 +208,16 @@ function resetBoat(){
   boat.jibFurled=false;boat.jibBack=false;boat.spi=false;boat.reef=0;boat.stuck=0;boat.gtime=0;
   game.pilot=0;boat.wake.length=0;boat.grounded=0;
   game.clock=0;game.next=0;game.started=false;game.done=null;
+  // la rotta pianificata resta — è un disegno del marinaio, non uno stato
+  // della barca — ma riparte dal primo punto, come si riparte dal porto
+  piano.i=0;piano.da={x:boat.x,y:boat.y};
   if(world.ports) startVoyage(nearestPort(boat.x,boat.y));
   say("Al via da "+(voy?voy.from:"—"));
 }
 function newWorld(seedStr){
   world=mapMode==="ionio"?ionianWorld():genWorld(seedStr);
   MARK_R=clamp(world.size/130,45,150);
+  pianoAzzera(true);                    // altra carta, altri punti: la rotta vecchia non vuol dire niente
   fillPorts();
   gusts=[];for(let i=0;i<14;i++)gusts.push(newGust(true));
   cam.x=boat.x;cam.y=boat.y;streaks=[];for(let i=0;i<160;i++)streaks.push(spawnStreak(true));
@@ -640,6 +644,13 @@ addEventListener("keydown",e=>{
   if(k==="l")toggleLog();
   if(k==="c")toggleChart();
   if(k==="0"&&chart.on)chartFit();
+  // sulla carta si cancella la rotta: Canc toglie l'ultimo punto,
+  // Maiusc+Canc l'intera linea. Fuori dalla carta non c'è niente da segnare
+  if(chart.on&&(k==="backspace"||k==="delete")){
+    if(e.shiftKey||!piano.pts.length)pianoAzzera();
+    else{pianoTogli(piano.pts.length-1);
+         say(piano.pts.length?"Ultimo punto tolto — ne restano "+piano.pts.length:"Rotta cancellata");}
+  }
   if(k==="h")toggleHelp();
   if(k==="r")askConfirm("Riportare la barca al via? La regata in corso e il cronometro ripartono da zero.",resetBoat);
   if(k==="z")cyclePilot();
@@ -807,15 +818,25 @@ if("ontouchstart" in window){
 
 /* ══════════════════ disegno ══════════════════ */
 const cv=document.getElementById("cv"), ctx=cv.getContext("2d");
-cv.addEventListener("pointerdown",e=>{ if(chart.on){chart.drag={x:e.offsetX,y:e.offsetY,cx:chart.x,cy:chart.y};cv.setPointerCapture(e.pointerId);} });
+/* Sulla carta il tasto sinistro fa due cose che vanno distinte a mano: se
+   trascini sposti la carta, se lasci dov'eri segni un punto di rotta. Il
+   confine è 5 px, perché un click non è mai perfettamente fermo. */
+let cliccoCarta=null;
+cv.addEventListener("pointerdown",e=>{ if(chart.on){chart.drag={x:e.offsetX,y:e.offsetY,cx:chart.x,cy:chart.y};cv.setPointerCapture(e.pointerId);
+  cliccoCarta=e.button===0?{x:e.offsetX,y:e.offsetY}:null;} });
 cv.addEventListener("pointermove",e=>{
   if(!chart.on)return;
   chart.mx=e.offsetX;chart.my=e.offsetY;
   if(chart.drag){chart.x=chart.drag.cx-(e.offsetX-chart.drag.x)/chart.z;
                  chart.y=chart.drag.cy-(e.offsetY-chart.drag.y)/chart.z;}
 });
-cv.addEventListener("pointerup",()=>{chart.drag=null;});
-cv.addEventListener("pointerleave",()=>{chart.drag=null;chart.mx=0;});
+cv.addEventListener("pointerup",e=>{
+  if(chart.on&&cliccoCarta&&Math.hypot(e.offsetX-cliccoCarta.x,e.offsetY-cliccoCarta.y)<5){
+    const p=c2w(e.offsetX,e.offsetY);pianoClick(p.x,p.y);
+  }
+  cliccoCarta=null;chart.drag=null;
+});
+cv.addEventListener("pointerleave",()=>{chart.drag=null;cliccoCarta=null;chart.mx=0;});
 let VW=0,VH=0,DPR=1;
 function resize(){
   DPR=Math.min(devicePixelRatio||1,2);
@@ -847,6 +868,7 @@ function draw(){
   drawStreaks(z);
   for(const is of world.islands) drawIsland(is,view,z);
   drawMarks(z);
+  drawPiano(z);
   drawGhost();
   drawWake();
   drawBoat();
@@ -1295,6 +1317,12 @@ function drawHUD(){
     ctx.fillStyle=i<game.next?C("--good"):(i===game.next?C("--accent"):"rgba(243,234,212,.35)");
     ctx.beginPath();ctx.arc(m.x,m.y,mr,0,TAU);ctx.fill();
   });
+  if(piano.pts.length){                                 // la rotta pianificata, per intero
+    ctx.strokeStyle="rgba(127,196,122,.65)";ctx.lineWidth=1.6/k;
+    ctx.beginPath();
+    piano.pts.forEach((p,j)=>j?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
+    ctx.stroke();
+  }
   ctx.fillStyle=C("--chart");
   ctx.save();ctx.translate(boat.x,boat.y);ctx.rotate(boat.h);
   const bs=world.size/40;
@@ -1350,6 +1378,42 @@ function drawHUD(){
       }else{
         ctx.fillStyle="rgba(243,234,212,.3)";ctx.textAlign="right";
         ctx.fillText("fuori rotta",tx+tw2-12,ty+52);ctx.textAlign="left";
+      }
+    }
+  }
+
+  /* ── rotta pianificata: il punto verso cui si va e quanto se ne è fuori */
+  if(piano.pts.length){
+    const tw3=176, tx=14;
+    let ty=py+ph+10;                                   // sotto gli strumenti
+    if(tp===px) ty+=74;                                // dove è finita anche la regata
+    if(voy&&voy.moving) ty+=(voy.ghost?62:46)+10;
+    const arrivato=piano.i>=piano.pts.length;
+    panel(tx,ty,tw3,arrivato?46:62);
+    label("ROTTA",tx+12,ty+16);
+    ctx.textAlign="right";ctx.font="10px ui-monospace,monospace";ctx.fillStyle=C("--chart-dim");
+    ctx.fillText(Math.min(piano.i+1,piano.pts.length)+"/"+piano.pts.length,tx+tw3-12,ty+16);
+    ctx.textAlign="left";
+    if(arrivato){
+      ctx.font="11px ui-monospace,monospace";ctx.fillStyle=C("--good");
+      ctx.fillText("PERCORSA TUTTA",tx+12,ty+34);
+    }else{
+      const p=piano.pts[piano.i];
+      const d=Math.hypot(p.x-boat.x,p.y-boat.y);
+      const br=(angOf(p.x-boat.x,p.y-boat.y)*R2D+360)%360;
+      ctx.font="11px ui-monospace,monospace";ctx.fillStyle=C("--chart");
+      ctx.fillText("RIL "+String(Math.round(br)).padStart(3,"0")+"°",tx+12,ty+34);
+      ctx.textAlign="right";ctx.fillStyle=C("--chart-dim");
+      ctx.fillText(nm(d).toFixed(2)+" nm",tx+tw3-12,ty+34);ctx.textAlign="left";
+      // lo scarto è in metri VERI, come le miglia: la carta è ridotta 1:6
+      const s=pianoScarto();
+      ctx.font="10px ui-monospace,monospace";
+      if(s===null){ctx.fillStyle="rgba(243,234,212,.3)";ctx.fillText("SCARTO —",tx+12,ty+52);}
+      else{
+        const mr=Math.abs(s)*SCALE_GEO;
+        ctx.fillStyle=mr>400?C("--warn"):C("--good");
+        ctx.fillText("SCARTO "+(mr<1852?Math.round(mr)+" m":nm(Math.abs(s)).toFixed(2)+" nm")
+          +(mr<20?"":(s>0?" A DRITTA":" A SINISTRA")),tx+12,ty+52);
       }
     }
   }
@@ -1515,6 +1579,125 @@ document.getElementById("wind").oninput=e=>{
   document.getElementById("windv").textContent=windBase.toFixed(1)+" m/s";
 };
 
+/* ══════════════════ rotta pianificata ══════════════════ */
+/* La rotta a matita sulla carta: una spezzata di punti segnati col mouse
+   prima di partire, che poi resta tratteggiata sul mare mentre si naviga.
+   Non governa niente — non è un autotimoniere, non tocca la fisica e la
+   golden test non se ne accorge — serve a vedere dove si voleva passare e
+   di quanto ci si sta scostando, che è esattamente quello che fa una linea
+   tracciata sulla carta vera.
+
+   `i` è il punto verso cui si sta andando: sale da solo quando ci si passa
+   entro `PIANO_R`. La tratta in corso va da `da` a `pts[i]`, dove `da` è il
+   punto precedente, oppure — sulla prima tratta — dov'era la barca quando
+   la rotta è stata tracciata. Senza `da` lo scarto dalla rotta non
+   esisterebbe fino al secondo punto, cioè proprio nel tratto in cui si
+   esce dal porto e serve di più.
+
+   Si chiama `piano` (il piano di rotta) e non `rotta` perché in tutto il
+   resto del file, e nelle sonde di collaudo, *rotta* è la direzione della
+   prua: due cose diverse con lo stesso nome nello stesso ambito sono un
+   errore che aspetta.                                                  */
+const PIANO_R=70;                  // raggio di passaggio: dentro, il punto è girato
+const piano={pts:[],i:0,da:{x:0,y:0}};
+
+function pianoAzzera(muto){
+  piano.pts.length=0;piano.i=0;piano.da={x:boat.x,y:boat.y};
+  if(!muto)say("Rotta cancellata");
+}
+function pianoTogli(k){
+  if(k<0||k>=piano.pts.length)return false;
+  piano.pts.splice(k,1);
+  if(piano.i>k)piano.i--;                       // il punto attivo resta lo stesso punto
+  if(piano.i>piano.pts.length)piano.i=piano.pts.length;
+  if(!piano.pts.length)piano.da={x:boat.x,y:boat.y};
+  return true;
+}
+/* Miglia vere che restano: dalla barca al punto attivo, poi di punto in punto. */
+function pianoResta(){
+  let d=0,px=boat.x,py=boat.y;
+  for(let i=piano.i;i<piano.pts.length;i++){
+    d+=Math.hypot(piano.pts[i].x-px,piano.pts[i].y-py);
+    px=piano.pts[i].x;py=piano.pts[i].y;
+  }
+  return nm(d);
+}
+/* Un click sulla carta: sopra un punto lo toglie, altrove ne aggiunge uno in
+   coda. La tolleranza è di 12 px sullo schermo a qualunque ingrandimento —
+   in metri di gioco sarebbe irraggiungibile da lontano e grande come mezzo
+   golfo da vicino. Sta qui, e non nell'ascoltatore, perché la harness non
+   può recapitare eventi: è la stessa ragione di `rotella(e)`.          */
+function pianoClick(x,y){
+  const tol=12/chart.z;
+  let k=-1,bd=tol;
+  for(let i=0;i<piano.pts.length;i++){
+    const d=Math.hypot(piano.pts[i].x-x,piano.pts[i].y-y);
+    if(d<=bd){bd=d;k=i;}
+  }
+  if(k>=0){
+    pianoTogli(k);
+    say(piano.pts.length?"Punto di rotta tolto — ne restano "+piano.pts.length:"Rotta cancellata");
+    return "tolto";
+  }
+  if(!piano.pts.length) piano.da={x:boat.x,y:boat.y};
+  piano.pts.push({x:Math.round(x),y:Math.round(y)});
+  say("Punto "+piano.pts.length+" segnato — "+pianoResta().toFixed(2)+" nm da qui alla fine");
+  return "aggiunto";
+}
+/* Scarto dalla rotta: distanza dalla congiungente della tratta in corso,
+   positiva se la barca è a dritta di essa. È il numero che distingue il
+   seguire la linea dal puntare al punto: scarroccia tutta la traversata e
+   arrivi lo stesso, ma passi dove non avevi guardato i fondali.        */
+function pianoScarto(){
+  const b=piano.pts[piano.i]; if(!b)return null;
+  const a=piano.da, dx=b.x-a.x, dy=b.y-a.y, L=Math.hypot(dx,dy);
+  if(L<1)return null;
+  return ((boat.y-a.y)*dx-(boat.x-a.x)*dy)/L;
+}
+function pianoUpdate(){
+  const p=piano.pts[piano.i]; if(!p)return;
+  if(Math.hypot(boat.x-p.x,boat.y-p.y)>PIANO_R)return;
+  piano.da={x:p.x,y:p.y};piano.i++;
+  say(piano.i>=piano.pts.length?"Ultimo punto di rotta raggiunto"
+      :"Punto "+piano.i+" passato — avanti al "+(piano.i+1)+", restano "+pianoResta().toFixed(2)+" nm");
+}
+
+/* Tratteggio sul mare. Le tratte già fatte restano, spente: si vede da dove
+   si è passati senza confonderle con quelle da fare. */
+const PIANO_COL={fatta:"rgba(127,196,122,.20)",avanti:"rgba(127,196,122,.45)",
+                 attiva:"rgba(127,196,122,.85)"};
+function drawPiano(z){
+  if(!piano.pts.length)return;
+  ctx.lineCap="round";
+  const linea=(ax,ay,bx,by,col,w,dash)=>{
+    ctx.strokeStyle=col;ctx.lineWidth=w/z;
+    ctx.setLineDash([dash[0]/z,dash[1]/z]);
+    ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(bx,by);ctx.stroke();
+    ctx.setLineDash([]);
+  };
+  for(let j=1;j<piano.pts.length;j++){
+    const a=piano.pts[j-1], b=piano.pts[j];
+    linea(a.x,a.y,b.x,b.y,j<piano.i?PIANO_COL.fatta:PIANO_COL.avanti,1.6,[9,7]);
+  }
+  const att=piano.pts[piano.i];
+  if(att){
+    linea(piano.da.x,piano.da.y,att.x,att.y,PIANO_COL.attiva,2.2,[10,6]);
+    // il cerchio di passaggio: dice quando il punto conterà per girato
+    ctx.strokeStyle="rgba(127,196,122,.30)";ctx.lineWidth=1.4/z;
+    ctx.beginPath();ctx.arc(att.x,att.y,PIANO_R,0,TAU);ctx.stroke();
+  }
+  ctx.font=(13/z).toFixed(2)+"px ui-monospace,monospace";
+  ctx.textAlign="center";
+  piano.pts.forEach((p,j)=>{
+    const fatto=j<piano.i, attivo=j===piano.i;
+    ctx.fillStyle=fatto?PIANO_COL.fatta:(attivo?PIANO_COL.attiva:PIANO_COL.avanti);
+    ctx.beginPath();ctx.arc(p.x,p.y,5/z,0,TAU);ctx.fill();
+    ctx.fillStyle=fatto?"rgba(243,234,212,.28)":"rgba(243,234,212,.75)";
+    ctx.fillText(String(j+1),p.x,p.y-11/z);
+  });
+  ctx.textAlign="left";ctx.lineCap="butt";
+}
+
 /* ══════════════════ carta nautica ══════════════════ */
 /* Vista a tutto schermo con l'aspetto di una carta di navigazione: carta
    chiara, terre color sabbia, secche azzurre, reticolato in gradi veri.  */
@@ -1589,6 +1772,25 @@ function drawChart(){
     voy.track.forEach((q,i)=>i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]));
     ctx.stroke();
   }
+  // la rotta pianificata, tracciata come a matita: la tratta in corso piena,
+  // le altre più tenui, e il cerchio di passaggio attorno al punto attivo
+  if(piano.pts.length){
+    ctx.lineCap="round";
+    ctx.strokeStyle="rgba(30,110,70,.55)";ctx.lineWidth=1.6/chart.z;
+    ctx.setLineDash([8/chart.z,6/chart.z]);
+    ctx.beginPath();
+    piano.pts.forEach((p,j)=>j?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
+    ctx.stroke();
+    const att=piano.pts[piano.i];
+    if(att){
+      ctx.strokeStyle="rgba(30,110,70,.95)";ctx.lineWidth=2.2/chart.z;
+      ctx.beginPath();ctx.moveTo(piano.da.x,piano.da.y);ctx.lineTo(att.x,att.y);ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.strokeStyle="rgba(30,110,70,.35)";ctx.lineWidth=1.2/chart.z;
+      ctx.beginPath();ctx.arc(att.x,att.y,PIANO_R,0,TAU);ctx.stroke();
+    }
+    ctx.setLineDash([]);ctx.lineCap="butt";
+  }
   ctx.restore();
 
   // ─ simboli in pixel, così restano leggibili a ogni zoom
@@ -1611,6 +1813,38 @@ function drawChart(){
     ctx.fillStyle=CHART.dim;ctx.textAlign="center";
     ctx.fillText(String(i+1),q.x,q.y+14);
   });
+  // punti di rotta, numerati, con rilevamento e distanza di ogni tratta:
+  // sono i due numeri che si scrivono a matita accanto alla linea
+  if(piano.pts.length){
+    const etichetta=(a,b2,attiva)=>{
+      const dx=b2.x-a.x, dy=b2.y-a.y, d=Math.hypot(dx,dy);
+      if(d*chart.z<50)return;                       // tratta corta: l'etichetta la coprirebbe
+      const q=S((a.x+b2.x)/2,(a.y+b2.y)/2);
+      if(q.x<-60||q.x>VW+60||q.y<-30||q.y>VH+30)return;
+      const t=String(Math.round((angOf(dx,dy)*R2D+360)%360)).padStart(3,"0")+"°  "+nm(d).toFixed(2)+" nm";
+      ctx.font=(attiva?10:9)+"px ui-monospace,monospace";
+      const w=ctx.measureText(t).width+10;
+      ctx.fillStyle="rgba(255,255,255,.72)";ctx.fillRect(q.x-w/2,q.y-8,w,16);
+      ctx.textAlign="center";ctx.textBaseline="middle";
+      ctx.fillStyle=attiva?"#1e6e46":CHART.dim;ctx.fillText(t,q.x,q.y);
+    };
+    for(let j=1;j<piano.pts.length;j++) etichetta(piano.pts[j-1],piano.pts[j],j===piano.i);
+    if(piano.i===0&&piano.pts[0]) etichetta(piano.da,piano.pts[0],true);
+    piano.pts.forEach((p,j)=>{
+      const q=S(p.x,p.y);
+      if(q.x<-40||q.x>VW+40||q.y<-40||q.y>VH+40)return;
+      const attivo=j===piano.i, fatto=j<piano.i;
+      ctx.fillStyle="rgba(255,255,255,.85)";
+      ctx.beginPath();ctx.arc(q.x,q.y,5,0,TAU);ctx.fill();
+      ctx.strokeStyle=fatto?"rgba(30,110,70,.40)":"#1e6e46";ctx.lineWidth=attivo?2.2:1.2;
+      ctx.stroke();
+      ctx.font="9px ui-monospace,monospace";ctx.textAlign="left";ctx.textBaseline="middle";
+      ctx.fillStyle=fatto?"rgba(30,110,70,.45)":"#1e6e46";
+      ctx.fillText(String(j+1),q.x+8,q.y-7);
+    });
+    ctx.textAlign="center";
+  }
+
   // barca, con la rotta proiettata a dieci minuti
   const b=S(boat.x,boat.y);
   const sp=Math.hypot(boat.vx,boat.vy);
@@ -1694,6 +1928,14 @@ function drawChart(){
   ctx.fillText(world.name.toUpperCase(),24,32);
   ctx.fillStyle=CHART.dim;ctx.font="9px ui-monospace,monospace";
   ctx.fillText("SCALA DI GIOCO 1:"+SCALE_GEO+"  ·  TRASCINA PER SPOSTARE  ·  ROTELLA PER INGRANDIRE  ·  C CHIUDE  ·  0 INQUADRA TUTTO",24,46);
+  // la riga della rotta: come si traccia, e quanto è lunga quella che c'è
+  if(piano.pts.length){
+    ctx.fillStyle="#1e6e46";
+    ctx.fillText("ROTTA · "+piano.pts.length+(piano.pts.length===1?" PUNTO":" PUNTI")+
+                 " · "+pianoResta().toFixed(2)+" nm DA QUI  ·  CLICCA SU UN PUNTO PER TOGLIERLO  ·  CANC L'ULTIMO  ·  MAIUSC+CANC TUTTA",24,60);
+  }else{
+    ctx.fillText("CLICCA SUL MARE PER SEGNARE UN PUNTO DI ROTTA: LA LINEA RESTA TRATTEGGIATA ANCHE IN NAVIGAZIONE",24,60);
+  }
   ctx.textBaseline="alphabetic";
 }
 
@@ -2045,6 +2287,7 @@ function frame(now){
     const n=Math.max(2,Math.ceil(sdt/0.02)), sd=sdt/n;   // passi corti: la fisica resta stabile
     for(let i=0;i<n;i++) physics(sd);
     voyUpdate(sdt);
+    pianoUpdate();
     tutUpdate(sdt);
     if(game.msgT>0)game.msgT-=dt;                        // gli avvisi durano in tempo reale
   }
