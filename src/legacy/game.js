@@ -1020,7 +1020,8 @@ function drawBoat(){
     ottima:  ["rgba(238,252,236,.96)","rgba(127,196,122,1)"],
     aperta:  ["rgba(238,252,236,.96)","rgba(127,196,122,1)"],   // in poppa è giusto così
     cazzata: ["rgba(243,238,225,.92)","rgba(196,192,176,.9)"],
-    stallo:  ["rgba(226,150,110,.94)","rgba(226,102,45,1)"]
+    stallo:  ["rgba(226,150,110,.94)","rgba(226,102,45,1)"],
+    sventato:["rgba(240,226,190,.45)","rgba(232,177,61,.70)"]   // solo spinnaker
   };
   const trimColor=st=>SAILCOL[st]||SAILCOL.cazzata;
   function sail(ox,oy,ang,len,side,luff,st){
@@ -1066,8 +1067,12 @@ function drawBoat(){
     const bulge=dv(ang+side*Math.PI/2);
     const f=boat.spiLimp?Math.sin(game.t*14)*0.12:0;
     const c1=(-L*0.55+cy)/2+bulge.x*len*(0.42+f), c2=0;
-    ctx.fillStyle=boat.spiLimp?"rgba(226,140,90,.45)":"rgba(230,126,60,.88)";
-    ctx.strokeStyle="rgba(10,36,51,.5)";ctx.lineWidth=0.4;
+    // Il corpo resta arancione — è l'identità dello spi — ma il bordo fa da
+    // spia della regolazione come sulle altre vele: prima era un filo scuro
+    // fisso, e lo spinnaker era l'unica vela il cui colore non diceva niente.
+    const molle=boat.stJ==="sventato"||boat.stJ==="fileggia";
+    ctx.fillStyle=molle?"rgba(226,140,90,.45)":"rgba(230,126,60,.88)";
+    ctx.strokeStyle=trimColor(boat.stJ)[1];ctx.lineWidth=0.55;
     ctx.beginPath();ctx.moveTo(0,-L*0.55);
     ctx.quadraticCurveTo(cx/2+bulge.x*len*(0.55+f),(-L*0.55+cy)/2+bulge.y*len*(0.55+f),cx,cy);
     ctx.quadraticCurveTo(cx/2+bulge.x*len*(0.16+f),(-L*0.55+cy)/2+bulge.y*len*(0.16+f),0,-L*0.55);

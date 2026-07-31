@@ -136,6 +136,22 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
   spinnaker, quindi sul gozzo mentiva alla prima riga e diventava
   impossibile all'undicesima.
 
+### Corretto
+- **Lo spinnaker non cambiava colore con la regolazione.** Randa e fiocco
+  dicono da sempre come sono regolati col colore — ambra fileggia, verde
+  ottima, arancio in stallo — ma lo spi era disegnato con un arancione
+  fisso e un filo di contorno scuro: l'unico dato che cambiava era
+  l'opacità quando si sventava sotto i 66°. Lo stato c'era già, `boat.stJ`
+  lo calcola anche per lo spi ed è quello che scrive lo strumento in
+  basso; solo il disegno lo ignorava, così con **Q E** si vedeva muovere
+  la vela ma non si vedeva mai *quando* era giusta. Ora il bordo dello
+  spinnaker usa la stessa tavolozza delle altre vele — è la spia — mentre
+  il corpo resta arancione, perché quel colore è l'identità dello spi e
+  tingerlo di verde lo confonderebbe con la randa. Il corpo si spegne
+  quando la vela non tira (sventata o fileggiante). Aggiunto alla
+  tavolozza lo stato `sventato`, che esiste solo per lo spinnaker e prima
+  cadeva sul grigio di `cazzata`.
+
 ---
 
 Le voci precedenti sono in [`docs/changelog/2026-07.md`](docs/changelog/2026-07.md).
