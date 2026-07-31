@@ -550,6 +550,18 @@ function setCavallino(v){
   boat.rudderCmd=clamp(boat.rudderCmd+(nv-boat.rudderTrim),-1,1);
   boat.rudderTrim=nv;
 }
+/* Rimettere dritta la barra: la chiamano Spazio (tastiera) e il doppio
+   click del tasto destro (mouse), che devono fare la stessa identica cosa.
+   Con `azzera` (Maiusc+Spazio) sparisce anche il cavallino; senza, la barra
+   torna al cavallino e non al centro geometrico — è la regola di tutta la
+   barca, altrimenti ogni raddrizzata cancellerebbe la regolazione. */
+function centraBarra(azzera){
+  if(azzera){boat.rudderTrim=0;boat.rudderCmd=0;}
+  else boat.rudderCmd=boat.rudderTrim;
+  if(game.pilot){game.pilot=0;say("Autotimoniere disinserito — "+(boat.rudderTrim?"barra al cavallino":"barra dritta"));}
+  else if(azzera) say("Barra dritta e cavallino azzerato");
+  else if(boat.rudderTrim) say("Barra riportata al cavallino — "+barraDesc(boat.rudderTrim));
+}
 
 /* ══════════════════ tratteggi del vento ══════════════════ */
 /* Ogni tratteggio segue il vento LOCALE: dentro una raffica si allunga,
@@ -661,13 +673,7 @@ addEventListener("keydown",e=>{
           :"Cavallino preso a "+barraDesc(boat.rudderTrim)+" — la barra torna qui, non al centro");
     }
   }
-  if(k===" "){
-    if(e.shiftKey){boat.rudderTrim=0;boat.rudderCmd=0;}
-    else boat.rudderCmd=boat.rudderTrim;
-    if(game.pilot){game.pilot=0;say("Autotimoniere disinserito — "+(boat.rudderTrim?"barra al cavallino":"barra dritta"));}
-    else if(e.shiftKey) say("Barra dritta e cavallino azzerato");
-    else if(boat.rudderTrim) say("Barra riportata al cavallino — "+barraDesc(boat.rudderTrim));
-  }
+  if(k===" ") centraBarra(e.shiftKey);
 });
 addEventListener("keyup",e=>{keys[e.key.toLowerCase()]=0;});
 addEventListener("blur",()=>{for(const k in keys)keys[k]=0;});
@@ -736,9 +742,15 @@ function rotella(e){
   // sono giù *durante* lo scatto, quindi non serve ricordarselo da soli
   if(e.altKey||(e.buttons&2)){     // si governa, e vale anche a vele automatiche
     if(!s)return;
-    if(game.pilot>=2) game.pilotTgt=norm(game.pilotTgt+s*W_ROTTA);   // sposta la rotta impostata
-    else if(e.shiftKey) setCavallino(boat.rudderTrim+s*W_CAVALLINO); // Alt+Maiusc = il neutro
-    else boat.rudderCmd=clamp(boat.rudderCmd+s*W_BARRA,-1,1);
+    // il timone va al contrario delle scotte: rotella IN SU a dritta, IN GIÙ
+    // a sinistra, come la ruota del timone che si gira dalla parte in cui si
+    // vuole andare. Vale per tutto quello che governa — barra, cavallino e
+    // rotta impostata — perché è lo stesso gesto e deve far accostare la
+    // barca sempre dalla stessa parte.
+    const g=-s;
+    if(game.pilot>=2) game.pilotTgt=norm(game.pilotTgt+g*W_ROTTA);   // sposta la rotta impostata
+    else if(e.shiftKey) setCavallino(boat.rudderTrim+g*W_CAVALLINO); // Alt+Maiusc = il neutro
+    else boat.rudderCmd=clamp(boat.rudderCmd+g*W_BARRA,-1,1);
     return;
   }
   if(game.auto)return;
@@ -759,6 +771,29 @@ addEventListener("wheel",e=>{
 // senza questo, il tasto destro usato come modificatore apre il menù del
 // browser sopra il mare; sui pannelli del menù resta invece disponibile
 addEventListener("contextmenu",e=>{ if(e.target&&e.target.id==="cv")e.preventDefault(); });
+
+/* Doppio click del tasto destro sul mare: barra dritta, come Spazio.
+   Il tasto destro è già il modificatore del timone — tenuto premuto si
+   governa con la rotella — quindi chi governa col mouse ha lì sotto il dito
+   anche il modo di raddrizzare, senza tornare alla tastiera.
+   I due click si contano a mano: `dblclick` il browser lo manda solo per il
+   tasto sinistro. La finestra è quella di sistema (~350 ms) e il tempo lo
+   dà l'evento, non l'orologio, così la funzione resta collaudabile. */
+const DOPPIO_MS=350;
+let ultimoDestro=-1e9;
+function clickDestro(e){
+  if(e.button!==2)return false;
+  const doppio=e.timeStamp-ultimoDestro<=DOPPIO_MS;
+  ultimoDestro=doppio?-1e9:e.timeStamp;      // il terzo click non fa una seconda coppia
+  if(!doppio||chart.on||game.paused)return false;
+  const conPilota=game.pilot;
+  centraBarra(false);
+  // centraBarra tace quando non c'è niente da dire; qui una conferma serve,
+  // perché il gesto è del mouse e non si vede se è stato inteso
+  if(!conPilota&&!boat.rudderTrim) say("Barra dritta");
+  return true;
+}
+addEventListener("mousedown",e=>{ if(e.target&&e.target.id==="cv") clickDestro(e); });
 
 if("ontouchstart" in window){
   document.body.classList.add("touch");
@@ -1867,7 +1902,7 @@ const TUT=[
  txt:"I <b>tratteggi</b> sull'acqua scorrono nella direzione in cui soffia il vento: più sono lunghi e chiari, più è forte. Nella <b>rosa</b> in alto a destra la freccia arancione indica da dove viene, e il settore giallo è la zona in cui non puoi navigare. La rosa è orientata a prua: sta ferma la barchetta e gira il mondo."},
 
 {ttl:"La barra",hi:"rudder",init(){tut.mem.h0=boat.h;},
- txt:"Le <b>frecce sinistra e destra</b> muovono la barra, che <b>resta dove la lasci</b>: non torna al centro da sola. Sull'indicatore TIMONE il segno chiaro è dove l'hai messa, quello pieno è dove è arrivata la pala. <b>Spazio</b> la rimette dritta. Per gli aggiustamenti piccoli ci sono <b>,</b> e <b>.</b>, cinque volte più fini: ci torniamo fra poco, perché sono la chiave per non combattere col timone. Se preferisci il mouse, <b>Alt + rotella</b> — o il <b>tasto destro premuto</b> mentre giri la rotella — muove la barra e la lascia dov'è.",
+ txt:"Le <b>frecce sinistra e destra</b> muovono la barra, che <b>resta dove la lasci</b>: non torna al centro da sola. Sull'indicatore TIMONE il segno chiaro è dove l'hai messa, quello pieno è dove è arrivata la pala. <b>Spazio</b> la rimette dritta. Per gli aggiustamenti piccoli ci sono <b>,</b> e <b>.</b>, cinque volte più fini: ci torniamo fra poco, perché sono la chiave per non combattere col timone. Se preferisci il mouse, <b>Alt + rotella</b> — o il <b>tasto destro premuto</b> mentre giri la rotella — muove la barra e la lascia dov'è: in su a dritta, in giù a sinistra, dalla parte in cui gireresti la ruota. Un <b>doppio click del tasto destro</b> la rimette dritta, come Spazio.",
  goal:"Accosta finché la rotta è cambiata di 60°",
  ok:()=>Math.abs(norm(boat.h-tut.mem.h0))>60*D2R},
 
