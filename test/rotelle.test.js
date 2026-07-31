@@ -34,7 +34,7 @@ test("il passo delle rotelle scala lo scatto, da 1× a un decimo", async () => {
     ${SCATTO}
     const randa = passo => { pronti(); wheelStep=passo; scatto({deltaY:100});
                              return (boat.trim-45*D2R)*R2D; };
-    const barra = passo => { pronti(); wheelStep=passo; scatto({deltaY:100,altKey:true});
+    const barra = passo => { pronti(); wheelStep=passo; scatto({deltaY:-100,altKey:true});
                              return boat.rudderCmd; };
     report({ pieno: randa(1), mezzo: randa(0.5), decimo: randa(0.1),
              bPieno: barra(1), bDecimo: barra(0.1) });
@@ -58,30 +58,30 @@ test("Alt+rotella governa la barra, e lo fa anche a vele automatiche", async () 
   const r = await runInGame(`
     ${MONDO}
     ${SCATTO}
-    pronti(); scatto({deltaY:100,altKey:true});  const dritta=boat.rudderCmd;
-    pronti(); scatto({deltaY:-100,altKey:true}); const sinistra=boat.rudderCmd;
+    pronti(); scatto({deltaY:-100,altKey:true}); const dritta=boat.rudderCmd;
+    pronti(); scatto({deltaY:100,altKey:true});  const sinistra=boat.rudderCmd;
     // la barra non deve muovere le scotte, e le scotte non devono muovere la barra
     pronti(); const t0=boat.trim, j0=boat.jib;
-    scatto({deltaY:100,altKey:true});
+    scatto({deltaY:-100,altKey:true});
     const scotteFerme = boat.trim===t0 && boat.jib===j0;
     scatto({deltaY:100});
     const barraFerma = Math.abs(boat.rudderCmd-dritta)<1e-12;
     // con la regolazione vele automatica (T) si governa comunque
-    pronti(); game.auto=true; scatto({deltaY:100,altKey:true});
+    pronti(); game.auto=true; scatto({deltaY:-100,altKey:true});
     const conAuto=boat.rudderCmd, randaAuto=boat.trim;
     // a fine corsa si ferma, non sfonda
-    pronti(); for(let i=0;i<40;i++) scatto({deltaY:100,altKey:true});
+    pronti(); for(let i=0;i<40;i++) scatto({deltaY:-100,altKey:true});
     const fondo=boat.rudderCmd;
     // il tasto destro tenuto premuto vale come Alt: si governa con una mano sola
-    pronti(); scatto({deltaY:100,buttons:2});
+    pronti(); scatto({deltaY:-100,buttons:2});
     const conTastoDestro=boat.rudderCmd, randaTastoDestro=boat.trim;
     report({ dritta, sinistra, scotteFerme, barraFerma, conAuto, randaAuto, fondo,
              conTastoDestro, randaTastoDestro, t0, j0 });
   `);
 
-  assert.ok(r.dritta > 0.05, `rotella in giù = barra a dritta (${r.dritta.toFixed(3)})`);
+  assert.ok(r.dritta > 0.05, `rotella in su = barra a dritta (${r.dritta.toFixed(3)})`);
   assert.ok(Math.abs(r.sinistra + r.dritta) < 1e-12,
-    `in su = a sinistra, e della stessa quantità (${r.sinistra.toFixed(3)})`);
+    `in giù = a sinistra, e della stessa quantità (${r.sinistra.toFixed(3)})`);
   assert.ok(r.scotteFerme, "Alt+rotella non deve toccare le scotte");
   assert.ok(r.barraFerma, "la rotella senza Alt non deve toccare la barra");
   assert.ok(Math.abs(r.conAuto - r.dritta) < 1e-12,
@@ -97,8 +97,8 @@ test("Alt+Maiusc+rotella muove il cavallino, più fine della barra", async () =>
   const r = await runInGame(`
     ${MONDO}
     ${SCATTO}
-    pronti(); scatto({deltaY:100,altKey:true});               const barra=boat.rudderCmd;
-    pronti(); scatto({deltaY:100,altKey:true,shiftKey:true});
+    pronti(); scatto({deltaY:-100,altKey:true});               const barra=boat.rudderCmd;
+    pronti(); scatto({deltaY:-100,altKey:true,shiftKey:true});
     report({ barra, cav: boat.rudderTrim, cmd: boat.rudderCmd });
   `);
 
@@ -114,17 +114,89 @@ test("con l'autotimoniere su ROTTA la rotella sposta la rotta, non la barra", as
     ${MONDO}
     ${SCATTO}
     pronti(); game.pilot=2; game.pilotTgt=0; boat.h=0;
-    scatto({deltaY:100,altKey:true});
+    scatto({deltaY:-100,altKey:true});
     const rotta=game.pilotTgt*R2D, barra=boat.rudderCmd;
     // e la carta ha la precedenza: lì la rotella è lo zoom, non il timone
     pronti(); chart.on=true; chart.z=0.3; scatto({deltaY:-100,altKey:true});
     report({ rotta, barra, zoom: chart.z, barraSuCarta: boat.rudderCmd });
   `);
 
-  assert.ok(Math.abs(r.rotta - 5) < 0.01, `uno scatto pieno sposta la rotta di 5° (${r.rotta.toFixed(2)}°)`);
+  assert.ok(Math.abs(r.rotta - 5) < 0.01,
+    `lo stesso scatto che porta la barra a dritta accosta la rotta di 5° a dritta (${r.rotta.toFixed(2)}°)`);
   assert.equal(r.barra, 0, "con l'autotimoniere inserito la barra non la muovi tu");
   assert.ok(r.zoom > 0.3, "sulla carta la rotella resta lo zoom");
   assert.equal(r.barraSuCarta, 0, "e non tocca il timone");
+});
+
+test("il timone gira al contrario delle scotte, e tutto il governo con lui", async () => {
+  const r = await runInGame(`
+    ${MONDO}
+    ${SCATTO}
+    // stesso scatto (in giù) su scotte e su timone: la randa lasca, la barra
+    // va a sinistra. Il verso del timone è quello della ruota, non quello
+    // della scotta.
+    pronti(); scatto({deltaY:100});               const randaGiu=boat.trim-45*D2R;
+    pronti(); scatto({deltaY:100,altKey:true});   const barraGiu=boat.rudderCmd;
+    pronti(); scatto({deltaY:100,altKey:true,shiftKey:true}); const cavGiu=boat.rudderTrim;
+    pronti(); game.pilot=2; game.pilotTgt=0; boat.h=0;
+    scatto({deltaY:100,altKey:true});             const rottaGiu=game.pilotTgt;
+    // e il tasto destro premuto segue la stessa regola di Alt
+    pronti(); scatto({deltaY:100,buttons:2});     const barraDestroGiu=boat.rudderCmd;
+    report({ randaGiu, barraGiu, cavGiu, rottaGiu, barraDestroGiu });
+  `);
+
+  assert.ok(r.randaGiu > 0, "la rotella in giù continua a lascare la randa");
+  assert.ok(r.barraGiu < -0.05, `la rotella in giù porta la barra a sinistra (${r.barraGiu.toFixed(3)})`);
+  assert.ok(r.cavGiu < 0, `e il cavallino con lei (${r.cavGiu.toFixed(4)})`);
+  assert.ok(r.rottaGiu < 0, `e la rotta impostata accosta a sinistra (${(r.rottaGiu * 180 / Math.PI).toFixed(2)}°)`);
+  assert.ok(Math.abs(r.barraDestroGiu - r.barraGiu) < 1e-12,
+    "col tasto destro premuto il verso è lo stesso di Alt");
+});
+
+test("doppio click del tasto destro: barra dritta", async () => {
+  const r = await runInGame(`
+    ${MONDO}
+    ${SCATTO}
+    const destro = (t, o={}) => clickDestro({ button:2, timeStamp:t, ...o });
+    // due click ravvicinati sul mare rimettono la barra dov'è il neutro
+    pronti(); boat.rudderCmd=0.7;
+    const primo=destro(1000), secondo=destro(1200);
+    const dopoDoppio=boat.rudderCmd;
+    // due click lontani nel tempo non sono un doppio click
+    pronti(); boat.rudderCmd=0.7; destro(2000); destro(3000);
+    const dopoLenti=boat.rudderCmd;
+    // il terzo click non fa una seconda coppia col secondo
+    pronti(); boat.rudderCmd=0.7; destro(4000); destro(4100);
+    boat.rudderCmd=0.7; const terzo=destro(4200);
+    const dopoTerzo=boat.rudderCmd;
+    // torna al cavallino, non al centro: raddrizzare non cancella la regolazione
+    pronti(); boat.rudderTrim=0.3; boat.rudderCmd=0.9;
+    destro(5000); destro(5100);
+    const conCavallino=boat.rudderCmd, cavRimasto=boat.rudderTrim;
+    // e disinserisce l'autotimoniere, come Spazio
+    pronti(); game.pilot=2; destro(6000); destro(6100);
+    const pilota=game.pilot;
+    // il tasto sinistro non c'entra niente
+    pronti(); boat.rudderCmd=0.7; destro(7000,{button:0}); destro(7100,{button:0});
+    const conSinistro=boat.rudderCmd;
+    // sulla carta il doppio click destro non tocca il timone
+    pronti(); chart.on=true; boat.rudderCmd=0.7; destro(8000); destro(8100);
+    const suCarta=boat.rudderCmd;
+    report({ primo, secondo, dopoDoppio, dopoLenti, dopoTerzo, conCavallino,
+             cavRimasto, pilota, conSinistro, suCarta });
+  `);
+
+  assert.equal(r.primo, false, "un click solo non basta");
+  assert.equal(r.secondo, true, "il secondo click ravvicinato è il gesto");
+  assert.equal(r.dopoDoppio, 0, "la barra torna dritta");
+  assert.equal(r.dopoLenti, 0.7, "due click lenti lasciano la barra dov'è");
+  assert.equal(r.dopoTerzo, 0.7, "il terzo click non fa una seconda coppia");
+  assert.ok(Math.abs(r.conCavallino - 0.3) < 1e-12,
+    `con un cavallino inserito la barra torna lì, non al centro (${r.conCavallino})`);
+  assert.equal(r.cavRimasto, 0.3, "e il cavallino resta dov'era");
+  assert.equal(r.pilota, 0, "il doppio click riprende la barra, come Spazio");
+  assert.equal(r.conSinistro, 0.7, "col tasto sinistro non succede niente");
+  assert.equal(r.suCarta, 0.7, "sulla carta il timone non si tocca");
 });
 
 test("rotelle invertite: si invertono anche barra e cavallino", async () => {

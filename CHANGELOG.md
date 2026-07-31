@@ -10,6 +10,25 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
 ## Non rilasciato
 
 ### Aggiunto
+- **Doppio click del tasto destro: barra dritta.** Il tasto destro era già
+  il modificatore del timone — tenuto premuto si governa con la rotella —
+  ma per raddrizzare bisognava tornare alla tastiera e cercare **Spazio**,
+  cioè lasciare il mouse proprio nel momento in cui si sta governando con
+  una mano sola. Ora due click ravvicinati sul mare fanno esattamente
+  quello che fa Spazio: barra al **cavallino** (non al centro geometrico,
+  altrimenti ogni raddrizzata cancellerebbe la regolazione) e
+  autotimoniere disinserito. Non è un `dblclick` — il browser lo manda
+  solo per il tasto sinistro — quindi i due click si contano a mano sui
+  `mousedown`, con la finestra di sistema di 350 ms e il tempo preso
+  dall'evento invece che dall'orologio, così `clickDestro(e)` resta
+  collaudabile come `rotella(e)`. Il corpo di Spazio è diventato
+  `centraBarra(azzera)`, condiviso fra tastiera e mouse: due gesti che
+  divergono sono un bug che aspetta.
+- `test/rotelle.test.js`: il doppio click raddrizza, due click lenti no, il
+  terzo click non fa una seconda coppia col secondo, col cavallino
+  inserito la barra torna lì e il cavallino resta, il tasto sinistro non
+  fa niente e sulla carta il timone non si tocca. Più un test sul verso
+  del governo, che confronta randa e barra sullo stesso scatto.
 - **Passo delle rotelle regolabile** (menù in alto, da `1×` a `1/10`) e
   **barra del timone con Alt + rotella**. Uno scatto di rotella valeva 6°
   di scotta, sempre: comodo per lascare tutto in poppa, inservibile per
@@ -94,6 +113,15 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
   silenzio.
 
 ### Cambiato
+- **Il verso della rotella sul timone è invertito**: in su a dritta, in
+  giù a sinistra. Prima seguiva il verso delle scotte, dove la rotella in
+  giù *lasca*; ma il timone non è una scotta, è una ruota, e la si gira
+  dalla parte in cui si vuole andare. L'inversione vale per tutto il
+  governo — barra, cavallino e rotta impostata con l'autotimoniere su
+  *ROTTA* — perché è lo stesso gesto e deve far accostare la barca sempre
+  dalla stessa parte. Le scotte non sono toccate, e nemmeno lo zoom della
+  carta. L'inversione delle rotelle del menù continua a valere sopra
+  questa: chi le aveva invertite ritrova il verso di prima.
 - Tre valori scritti a mano dentro `physics()` sono diventati parametri
   della barca, **a comportamento identico** per lo sloop (golden test
   verde prima e dopo): la rigidezza `K.STIFF` — il `9000` che era ripetuto
