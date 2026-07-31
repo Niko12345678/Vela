@@ -151,6 +151,22 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
   quando la vela non tira (sventata o fileggiante). Aggiunto alla
   tavolozza lo stato `sventato`, che esiste solo per lo spinnaker e prima
   cadeva sul grigio di `cazzata`.
+- **Un `\n` stampato a schermo nel Giornale di bordo** (`index.html:171`):
+  era una sequenza di escape finita per sbaglio dentro l'HTML, dove non
+  significa niente, quindi il browser la disegnava come due caratteri
+  qualsiasi sopra "Migliori traversate".
+- `docs/deploy.md` riconosce il guasto in cui siamo appena inciampati: il
+  sito pubblicato mostrava la barra del menù ma non il gioco, con le
+  tendine **Barca** e **Partenza** vuote e un 404 su `/src/main.js`. Non
+  era né la cache né la `base`: con la sorgente di Pages lasciata su
+  *Deploy from a branch*, GitHub aggiunge un proprio workflow che pubblica
+  la radice del repository, corre insieme al nostro e vince per pochi
+  secondi — così `deploy.yml` risultava verde mentre il sito serviva
+  l'`index.html` non compilato. La riga che diceva di impostare *Source:
+  GitHub Actions* c'era già ma sembrava una formalità: ora dice cosa
+  succede se la si salta, e il sintomo è scritto per esteso, perché le
+  tendine vuote sono il modo più rapido di capire che il bundle non è
+  mai partito.
 
 ---
 
