@@ -10,6 +10,62 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
 ## Non rilasciato
 
 ### Aggiunto
+- **Due joystick per governare col dito — o col mouse, senza rotella
+  orizzontale.** Sul telefono i comandi erano sei pulsanti tutto-o-niente:
+  o la scotta stava ferma o correva a 50°/s, e la fascia verde dell'ottimo è
+  larga pochi gradi, quindi la si scavalcava a ogni tentativo. Ora in fondo
+  allo schermo ci sono due pad: a sinistra il **timone**, a destra le due
+  **scotte** — asse verticale la randa, asse orizzontale il fiocco, in
+  diagonale tutte e due insieme, che è una cosa che dalla tastiera si può
+  fare solo con Maiusc e alla stessa velocità. I versi sono quelli che il
+  gioco usa già: in su cazza come la rotella verticale, a sinistra cazza
+  come l'orizzontale, a destra la barra accosta a dritta come la ruota.
+  Sono comandi di **velocità e non di posizione**, come i tasti: mollando il
+  pad la scotta resta dov'è e la barra non torna dritta da sola — un
+  joystick che si ricentra riporterebbe la barra al centro a ogni dito
+  alzato, cioè il contrario della frizione inserita che questa barca ha di
+  serie. La risposta è **quadratica**: a metà corsa vale un quarto, quindi
+  il primo terzo del pad regola fine come la rotella a 1/5 e il fondo corsa
+  va quanto una freccia tenuta premuta. Sul pad tondo il vettore si accorcia
+  invece di squadrarsi, come una cloche vera.
+  Si accendono da soli dove non c'è una tastiera (`ontouchstart` o puntatore
+  grossolano) e si accendono a mano da *Joystick* nel menù: senza rotella
+  orizzontale il fiocco si regolava solo con Q ed E.
+  Sopra i pad c'è la fila di pulsanti che sul telefono sostituisce la
+  tastiera — carta, pilota, vele automatiche, barra dritta, fiocco a collo,
+  terzaroli, fiocco, spi. Per averla, i comandi a colpo singolo sono usciti
+  dall'ascoltatore della tastiera e stanno in `comando(k, shift)`, che ora
+  ha due chiamanti e un collaudo.
+- **Pizzico a due dita per ingrandire la carta nautica.** La carta si
+  ingrandiva solo con la rotella, quindi su un telefono restava
+  all'inquadratura in cui la si trovava: si vedeva l'arcipelago intero e
+  non si poteva entrare in una cala per guardare i fondali. Ora due dita
+  che si allargano ingrandiscono attorno al loro punto di mezzo, che nel
+  frattempo trascina — è lo stesso gesto di qualunque mappa. Finché ci sono
+  due dita giù non si trascina con una sola e non si segna niente: il punto
+  di rotta lo segnerebbe il dito che si alza per primo, dove capita. Gli
+  ascoltatori del canvas sono diventati `cartaGiu/Muovi/Su`, funzioni con
+  un nome che il collaudo può chiamare come già fa con `rotella(e)`.
+  Sulla carta, su schermo stretto, le due righe di istruzioni sono in
+  versione corta (per esteso uscivano dallo schermo), la rosa scende sotto
+  il pulsante ☰, le latitudini non finiscono più dentro l'intestazione e la
+  scala grafica sta sopra la pulsantiera. I pad si nascondono — lì non
+  governano niente — ma i pulsanti restano, perché *Carta* è anche il modo
+  di richiudere la carta col dito.
+- `test/joystick.test.js`: il fondo corsa vale una freccia tenuta premuta
+  (barra, rotta impostata e scotte), a metà corsa si muove molto meno della
+  metà, la zona morta non governa, i versi dei quattro assi, il pad tondo si
+  accorcia in diagonale invece di squadrarsi, il timone ignora il verticale,
+  con l'autotimoniere si sposta la rotta e non la barra, a vele automatiche
+  le scotte non si toccano ma si governa, spento non comanda niente, e i
+  pulsanti danno gli stessi comandi dei tasti. Più il pizzico sulla carta:
+  ingrandisce in proporzione a quanto le dita si allontanano, il punto di
+  mezzo trascina, alzando le dita non si segna un punto di rotta, e con un
+  dito solo tocco e trascinamento continuano a fare quello che facevano.
+- `test/impaginazione.test.js`: scala e ingombri degli strumenti da 320 px
+  al monitor, in verticale e in orizzontale — la rosa non entra mai negli
+  strumenti, i pannelli non escono dallo schermo, non si accavallano fra
+  loro e nessuno finisce sotto i joystick.
 - **Rotta pianificata: si traccia sulla carta e resta tratteggiata in mare.**
   La carta nautica serviva solo a guardare: si leggeva rilevamento e
   distanza col cursore, si mandava a memoria "175° per due miglia e mezzo",
@@ -154,6 +210,22 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
   silenzio.
 
 ### Cambiato
+- **Gli strumenti si impaginano da soli sugli schermi stretti.** Erano
+  disegnati a coordinate fisse pensate per una finestra da computer: su un
+  telefono la rosa dei venti finiva sopra il pannello della velocità, la
+  carta ridotta sotto le scotte e il pulsante ☰ sopra tutto. Invece di
+  ritoccare cento coordinate, `hudBox()` stringe il contesto e finge una
+  finestra più larga (fino a 0,72×, sotto quella soglia le scritte da 10 px
+  diventerebbero illeggibili); da lì in giù si toglie roba invece di
+  rimpicciolire — rosa più piccola, carta ridotta via, pannello delle scotte
+  largo quanto lo schermo, che per cercare la fascia verde è anche meglio.
+  Il fondo dello schermo resta ai joystick e gli strumenti si alzano di
+  quanto è alta la loro fascia: sotto le dita non si legge niente.
+  Il menù del gioco su schermo piccolo parte chiuso — aperto copriva mezzo
+  mare, e per il lungo tutto — e diventa una fascia a due colonne col
+  pulsante ☰ in alto a destra, dove il telefono se lo aspetta. Nel menù è
+  comparso **Carta (C)**, perché su un telefono non c'è nessun tasto C da
+  premere.
 - **Il verso della rotella sul timone è invertito**: in su a dritta, in
   giù a sinistra. Prima seguiva il verso delle scotte, dove la rotella in
   giù *lasca*; ma il timone non è una scotta, è una ruota, e la si gira
@@ -178,6 +250,12 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
   impossibile all'undicesima.
 
 ### Corretto
+- **Il pannello della traversata non si sovrappone più a quello della
+  regata.** Quando lo schermo è troppo stretto per tenere la regata in alto
+  a destra, quella scende sotto gli strumenti — dove la traversata in corso
+  si disegnava già, alla stessa quota. Si leggevano i due orari uno sopra
+  l'altro. Ora la traversata scala di 74 px quando trova la regata al suo
+  posto.
 - **Lo spinnaker non cambiava colore con la regolazione.** Randa e fiocco
   dicono da sempre come sono regolati col colore — ambra fileggia, verde
   ottima, arancio in stallo — ma lo spi era disegnato con un arancione
@@ -208,6 +286,10 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
   succede se la si salta, e il sintomo è scritto per esteso, perché le
   tendine vuote sono il modo più rapido di capire che il bundle non è
   mai partito.
+
+### Rimosso
+- I sei pulsanti direzionali per il tocco (`#touch`): li sostituiscono i due
+  joystick, che fanno le stesse cose dosandole e occupano meno mare.
 
 ---
 

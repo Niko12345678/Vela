@@ -52,6 +52,7 @@
 
   #tut{top:58px;left:50%;transform:translateX(-50%);width:min(520px,calc(100% - 28px));
     padding:12px 16px 11px;display:none;z-index:6;font-size:12px;line-height:1.6}
+  #tut.su{top:46px}                       /* col menù nascosto sale un po' */
   #tut.on{display:block}
   #tutbar{display:flex;gap:10px;align-items:baseline;margin-bottom:6px}
   #tutnum{font-size:10px;color:var(--chart-dim);letter-spacing:.1em}
@@ -113,12 +114,64 @@
   #helpbox td:first-child{width:170px;white-space:nowrap;padding-right:14px}
   #helpbox p{margin:6px 0;color:#ded3ba}
 
-  #touch{position:absolute;bottom:0;left:0;right:0;height:0;z-index:4;display:none}
-  .tzone{position:absolute;bottom:14px;width:132px;height:66px;display:flex;gap:6px}
-  .tzone button{flex:1;font-size:18px;padding:0;background:rgba(8,32,46,.8)}
-  #tl{left:14px} #tr{right:14px} #tm{left:50%;transform:translateX(-50%)}
-  #touch .tzone button{font-size:13px}
-  body.touch #touch{display:block}
+  /* ── comandi a joystick ───────────────────────────────────────────
+     Due pad e una pulsantiera in fondo allo schermo: col dito sul
+     telefono, col mouse per chi non ha la rotella orizzontale.
+     L'ALTEZZA È UN CONTRATTO: gli strumenti disegnati sul canvas si
+     alzano di altrettanto per non finire sotto le dita. Se cambia qui,
+     cambiano JOY_ALTA e JOY_BASSA in game.js. */
+  #joy{position:absolute;left:0;right:0;bottom:0;height:166px;z-index:4;
+    display:none;flex-direction:column;justify-content:flex-end;gap:6px;
+    padding:0 12px 10px;pointer-events:none}
+  body.joy #joy{display:flex}
+  #joy>*{pointer-events:auto}
+  #jpads{display:flex;align-items:flex-end;justify-content:space-between}
+  .jpad{position:relative;display:grid;place-items:center;touch-action:none;
+    background:rgba(8,32,46,.62);border:1px solid rgba(243,234,212,.28);
+    user-select:none;-webkit-user-select:none;flex:none}
+  #jtimone{width:126px;height:76px;border-radius:38px}
+  #jvele{width:120px;height:120px;border-radius:50%}
+  .jknob{position:absolute;width:44px;height:44px;border-radius:50%;pointer-events:none;
+    background:rgba(243,234,212,.20);border:1px solid rgba(243,234,212,.45)}
+  .jpad.attivo .jknob{background:rgba(226,102,45,.55);border-color:var(--accent)}
+  .jpad::before{content:"";position:absolute;width:56%;height:1px;background:rgba(243,234,212,.14)}
+  #jvele::after{content:"";position:absolute;width:1px;height:56%;background:rgba(243,234,212,.14)}
+  .jax{position:absolute;font-size:8px;letter-spacing:.12em;
+    color:rgba(243,234,212,.5);pointer-events:none;white-space:nowrap}
+  .jax-y{top:6px} .jax-x{bottom:5px}
+  #jaz{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;
+    width:100%;max-width:660px;margin:0 auto}
+  #jaz button{font-size:9px;padding:6px 1px;letter-spacing:.02em;
+    background:rgba(8,32,46,.72);white-space:nowrap;overflow:hidden}
+
+  /* ── schermo stretto ──────────────────────────────────────────────
+     Il menù è una fascia a due colonne invece di una colonna sola alta
+     quanto lo schermo, il tutorial non si mangia più della metà e il
+     pulsante ☰ passa in alto a destra: in mezzo non c'è più posto fra il
+     pannello della velocità e la rosa dei venti. La soglia è la stessa di
+     `stretto` in game.js, dove la rosa scende per fargli spazio. */
+  @media (max-width:639px){
+    #settings{left:6px;right:6px;transform:none;max-height:74vh;overflow-y:auto;
+      gap:9px 10px;padding:10px 12px 12px}
+    #settings label{flex:1 1 44%}
+    #settings input[type=range]{width:100%;min-width:60px}
+    #settings button{flex:1 1 30%}
+    #showm{left:auto;right:8px;transform:none;padding:6px 10px;letter-spacing:.1em}
+    /* il tutorial nella fascia di mare in mezzo: in alto coprirebbe gli
+       strumenti di cui parla, in basso le scotte che fa guardare */
+    #tut,#tut.su{top:46%;transform:translate(-50%,-50%);max-height:44vh;
+      overflow-y:auto;font-size:11.5px}
+  }
+  @media (max-width:400px){
+    #jaz button{font-size:8px;letter-spacing:0;padding:6px 0}
+  }
+  @media (max-height:520px){
+    #joy{height:128px;padding-bottom:6px;gap:4px}
+    #jtimone{width:110px;height:60px;border-radius:30px}
+    #jvele{width:92px;height:92px}
+    .jknob{width:36px;height:36px}
+    #jaz button{padding:4px 1px}
+  }
 </style>
 </head>
 <body>
@@ -135,18 +188,36 @@
   <label><input id="easy" type="checkbox" checked> Mare facile</label>
   <label>Passo rotelle <select id="wstep"><option value="1" selected>1×</option><option value="0.5">1/2</option><option value="0.2">1/5</option><option value="0.1">1/10</option></select></label>
   <label><input id="winv" type="checkbox"> Rotelle invertite</label>
+  <label><input id="joyon" type="checkbox"> Joystick</label>
   <button id="tutb">Tutorial</button>
   <button id="gen">Nuova mappa</button>
   <button id="reset">Riporta al via</button>
+  <button id="chartb">Carta (C)</button>
   <button id="logb">Giornale</button>
   <button id="helpb">Comandi</button>
   <button id="hidem">Nascondi (M)</button>
 </div>
 
-<div id="touch">
-  <div class="tzone" id="tl"><button data-k="ArrowLeft">◀</button><button data-k="ArrowRight">▶</button></div>
-  <div class="tzone" id="tm"><button data-k="q">Fio +</button><button data-k="e">Fio −</button></div>
-  <div class="tzone" id="tr"><button data-k="ArrowUp">Ran +</button><button data-k="ArrowDown">Ran −</button></div>
+<div id="joy">
+  <div id="jaz">
+    <button data-k="c" title="Carta nautica a tutto schermo (C)">Carta</button>
+    <button data-k="z" title="Governo: richiamo al centro, rotta, vento, barra libera (Z)">Pilota</button>
+    <button data-k="t" title="Regolazione automatica delle vele (T)">Auto</button>
+    <button data-k=" " title="Barra al cavallino, autotimoniere disinserito (Spazio)">Barra</button>
+    <button data-k="b" title="Fiocco a collo, per uscire dalla panne (B)">Collo</button>
+    <button data-k="x" title="Prendi una mano di terzaroli (X)">Terz.</button>
+    <button data-k="f" title="Avvolgi o issa il fiocco (F)">Fiocco</button>
+    <button data-k="g" title="Issa o ammaina lo spinnaker (G)">Spi</button>
+  </div>
+  <div id="jpads">
+    <div class="jpad" id="jtimone" title="Timone — a destra accosta a dritta, come la ruota">
+      <div class="jknob"></div><span class="jax jax-x">↔ TIMONE</span>
+    </div>
+    <div class="jpad" id="jvele" title="Vele — in su cazza la randa, a sinistra cazza il fiocco">
+      <div class="jknob"></div>
+      <span class="jax jax-y">↕ RANDA</span><span class="jax jax-x">↔ FIOCCO</span>
+    </div>
+  </div>
 </div>
 
 <div id="tut" class="panel">
@@ -229,7 +300,30 @@
       <tr><td><kbd>L</kbd></td><td>Giornale di bordo</td></tr>
       <tr><td><kbd>M</kbd></td><td>Nascondi / mostra il menù in alto</td></tr>
       <tr><td><kbd>R</kbd> · <kbd>N</kbd> · <kbd>P</kbd> · <kbd>H</kbd></td><td>Riparti · nuova mappa · pausa · questa schermata</td></tr>
+      <tr><td>Joystick sinistro</td><td><strong>Timone</strong> · a destra accosta a dritta, come la ruota</td></tr>
+      <tr><td>Joystick destro</td><td><strong>Vele</strong> · in su cazza la randa, a sinistra cazza il fiocco. In diagonale tutte e due insieme</td></tr>
     </table>
+    <h2>Col dito, o senza rotella orizzontale</h2>
+    <p>Sul telefono i due <strong>joystick</strong> in fondo allo schermo compaiono da soli;
+       sul computer si accendono da <em>Joystick</em> nel menù in alto. Servono anche lì: senza
+       una rotella orizzontale il fiocco si regola solo con <kbd>Q</kbd> <kbd>E</kbd>, e il pad
+       destro dà le due scotte insieme con una mano sola.</p>
+    <p>Sono comandi di <strong>velocità</strong>, non di posizione, esattamente come i tasti:
+       quanto sposti il dito decide quanto in fretta si muove la scotta o la barra, e mollando
+       il pad <em>la regolazione resta dov'è</em> — la barra non torna dritta da sola, come con
+       la frizione inserita. La risposta non è lineare: il primo terzo di corsa regola fine come
+       la rotella a 1/5, il fondo corsa va come una freccia tenuta premuta.</p>
+    <p>La fila di pulsanti sopra i pad è la tastiera che sul telefono non c'è:
+       <em>Carta</em> (<kbd>C</kbd>), <em>Pilota</em> (<kbd>Z</kbd>), <em>Auto</em> (<kbd>T</kbd>),
+       <em>Barra</em> dritta (<kbd>Spazio</kbd>), <em>Collo</em> (<kbd>B</kbd>),
+       <em>Terz.</em> (<kbd>X</kbd>), <em>Fiocco</em> (<kbd>F</kbd>), <em>Spi</em> (<kbd>G</kbd>).</p>
+    <p>Su schermo stretto gli strumenti si stringono, la rosa dei venti rimpicciolisce e la
+       carta ridotta in basso a destra sparisce, perché non ci starebbe: la carta intera resta
+       a un pulsante di distanza. Il menù parte chiuso, dietro il ☰ in alto a destra.</p>
+    <p>Sulla carta aperta i due pad si tolgono di mezzo — lì non governano niente — ma la fila
+       di pulsanti resta, perché <em>Carta</em> è anche il modo di richiuderla. La carta si
+       ingrandisce <strong>pizzicando a due dita</strong>, e con un dito solo si trascina; un
+       tocco fermo segna un punto di rotta, come il click del mouse.</p>
     <h2>Come si naviga</h2>
     <p>Non puoi risalire il vento: entro ~35° dalla sua direzione le vele fileggiano e ti fermi. Per andare sopravvento devi bordeggiare, cioè zigzagare a ~45°.</p>
     <p>Le due barre in basso a sinistra sono la <strong>posizione delle scotte</strong>: tutta cazzata a sinistra, tutta lascata a destra. La <strong>fascia verde</strong> è calcolata cercando la scotta che dà più spinta con il vento che hai in quel momento, e la linea verde sottile è l'ottimo esatto. Portaci sopra il segno bianco e la vela è regolata.</p>
@@ -277,7 +371,8 @@
     <p><em>Ritmo</em>, da 1× a 6×, accelera lo scorrere del tempo: velocità, virate, raffiche e cronometro cambiano tutti insieme, quindi la barca si comporta esattamente allo stesso modo, solo che una traversata dura meno. Di serie è 2×.</p>
 <h2>La carta nautica</h2>
     <p><kbd>C</kbd> apre la carta a tutto schermo, con l'aspetto di una carta di navigazione vera: terre color sabbia, fascia di secche azzurra, reticolato in <strong>gradi e primi veri</strong> di latitudine e longitudine, rosa dei venti e scala grafica in miglia. Ci trovi tutti i porti col nome, le boe, la tua rotta tracciata e quella del fantasma.</p>
-    <p>Trascina per spostare, rotella per ingrandire, <kbd>0</kbd> per inquadrare tutto. Passando col cursore su un punto qualsiasi leggi <strong>rilevamento e distanza dalla barca</strong> e le sue coordinate: è così che si pianifica una traversata prima di partire. Mentre la carta è aperta la navigazione è in pausa, come quando ti fermi al tavolo da carteggio.</p>
+    <p>Trascina per spostare, rotella per ingrandire — <strong>due dita che si allargano</strong>
+       sul telefono, dove la rotella non c'è — <kbd>0</kbd> per inquadrare tutto. Passando col cursore su un punto qualsiasi leggi <strong>rilevamento e distanza dalla barca</strong> e le sue coordinate: è così che si pianifica una traversata prima di partire. Mentre la carta è aperta la navigazione è in pausa, come quando ti fermi al tavolo da carteggio.</p>
     <h2>Tracciare una rotta</h2>
     <p>Sulla carta, <strong>ogni click sul mare segna un punto di rotta</strong>: i punti si uniscono in una spezzata numerata, e accanto a ogni tratta trovi <strong>rilevamento e distanza in miglia</strong>, gli stessi due numeri che si scrivono a matita sulla carta di carta. Un click sopra un punto lo toglie, <kbd>Canc</kbd> toglie l'ultimo, <kbd>Maiusc</kbd>+<kbd>Canc</kbd> cancella tutto. Trascinare sposta la carta come prima: il click conta solo se lasci il tasto dove l'hai premuto.</p>
     <p>Chiusa la carta la rotta <strong>resta tratteggiata sul mare</strong>, davanti alla prua: la tratta che stai facendo è piena, quelle già fatte restano spente, e attorno al punto verso cui vai c'è il cerchio entro il quale conta per passato. Il pannello <em>ROTTA</em> in plancia dice a che punto sei, il <strong>rilevamento e la distanza</strong> del prossimo e soprattutto lo <strong>scarto</strong>: di quanti metri sei fuori dalla linea, e da che parte. Puntare al punto e seguire la linea non sono la stessa cosa — con vento e scarroccio puoi arrivare lo stesso passando dove non avevi guardato i fondali.</p>
