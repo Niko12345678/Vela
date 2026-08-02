@@ -639,6 +639,17 @@ addEventListener("keydown",e=>{
   }
   if(e.repeat)return;
   keys[k]=1;
+  comando(k,e.shiftKey);
+});
+addEventListener("keyup",e=>{keys[e.key.toLowerCase()]=0;});
+addEventListener("blur",()=>{for(const k in keys)keys[k]=0;});
+
+/* I comandi a colpo singolo, staccati dall'ascoltatore della tastiera
+   perché non è più lei sola a darli: la pulsantiera dei joystick manda qui
+   le stesse lettere, e un collaudo può chiamarli senza recapitare eventi.
+   Quello che si tiene premuto — frecce, Q/E, virgola e punto — sta invece
+   in input(), che lo legge fotogramma per fotogramma. */
+function comando(k,shift){
   if(k==="p")game.paused=!game.paused;
   if(k==="m")toggleMenu();
   if(k==="l")toggleLog();
@@ -647,7 +658,7 @@ addEventListener("keydown",e=>{
   // sulla carta si cancella la rotta: Canc toglie l'ultimo punto,
   // Maiusc+Canc l'intera linea. Fuori dalla carta non c'è niente da segnare
   if(chart.on&&(k==="backspace"||k==="delete")){
-    if(e.shiftKey||!piano.pts.length)pianoAzzera();
+    if(shift||!piano.pts.length)pianoAzzera();
     else{pianoTogli(piano.pts.length-1);
          say(piano.pts.length?"Ultimo punto tolto — ne restano "+piano.pts.length:"Rotta cancellata");}
   }
@@ -684,10 +695,8 @@ addEventListener("keydown",e=>{
           :"Cavallino preso a "+barraDesc(boat.rudderTrim)+" — la barra torna qui, non al centro");
     }
   }
-  if(k===" ") centraBarra(e.shiftKey);
-});
-addEventListener("keyup",e=>{keys[e.key.toLowerCase()]=0;});
-addEventListener("blur",()=>{for(const k in keys)keys[k]=0;});
+  if(k===" ") centraBarra(shift);
+}
 
 function input(dt){
   const L=keys["arrowleft"]||keys["a"], R=keys["arrowright"]||keys["d"];
@@ -716,7 +725,9 @@ function input(dt){
     if(keys["q"])boat.jib=clamp(boat.jib-rate,0,mx);
     if(keys["e"])boat.jib=clamp(boat.jib+rate,0,mx);
   }
+  joyInput(dt);
 }
+
 /* Rotelle del mouse: verticale = randa, orizzontale = fiocco.
    Con Alt — o col tasto destro tenuto premuto, per governare con una mano
    sola — si muove invece la barra del timone.
@@ -806,15 +817,155 @@ function clickDestro(e){
 }
 addEventListener("mousedown",e=>{ if(e.target&&e.target.id==="cv") clickDestro(e); });
 
-if("ontouchstart" in window){
-  document.body.classList.add("touch");
-  document.querySelectorAll("#touch button").forEach(b=>{
-    const k=b.dataset.k.toLowerCase();
-    const on=e=>{e.preventDefault();keys[k]=1;}, off=e=>{e.preventDefault();keys[k]=0;};
-    b.addEventListener("pointerdown",on);b.addEventListener("pointerup",off);
-    b.addEventListener("pointercancel",off);b.addEventListener("pointerleave",off);
-  });
+/* ══════════════════ joystick ══════════════════
+   Due pad in fondo allo schermo: uno per il timone, uno per le due scotte
+   — asse verticale la randa, asse orizzontale il fiocco. Nascono per il
+   telefono, dove i sei pulsanti di prima erano tutto o niente e coprivano
+   mezzo mare, ma si accendono anche dal menù: chi ha un mouse senza
+   rotella orizzontale non ha nessun altro modo di cazzare il fiocco a
+   dosaggio continuo.
+
+   Sono comandi di VELOCITÀ, non di posizione, esattamente come i tasti:
+   quanto sposti il dito decide quanto in fretta si muove la scotta o la
+   barra, e mollando il pad la scotta resta dov'è. Un joystick che tornasse
+   al centro riporterebbe la barra dritta a ogni dito alzato, cioè il
+   contrario della frizione inserita che questa barca ha di serie.
+
+   I versi sono quelli che il gioco usa già altrove: in su cazza la randa
+   come la rotella verticale, a sinistra cazza il fiocco come la rotella
+   orizzontale, a destra la barra accosta a dritta come la ruota. */
+const joy={on:false, timone:{x:0,y:0,id:null}, vele:{x:0,y:0,id:null}};
+const JOY_MORTA=0.10;              // zona morta: il dito appoggiato non governa
+const JOY_ALTA=166, JOY_BASSA=128; // altezza della fascia, gemella di #joy in index.html
+
+/* Quanto spazio si prendono i joystick in fondo allo schermo. Gli strumenti
+   si alzano di altrettanto: sotto le dita non ci si legge niente. */
+function joyInset(){ return joy.on?(VH<520?JOY_BASSA:JOY_ALTA):0; }
+
+/* Zona morta e risposta quadratica. La quadratica non è un vezzo: a metà
+   corsa vale un quarto, quindi il primo terzo del pad regola fine come la
+   rotella a 1/5, e il fondo corsa va veloce quanto una freccia tenuta
+   premuta. Con una risposta lineare la fascia verde si scavalca sempre. */
+function joyAsse(v){
+  const m=Math.abs(clamp(v,-1,1));
+  if(m<=JOY_MORTA)return 0;
+  const u=(m-JOY_MORTA)/(1-JOY_MORTA);
+  return (v<0?-1:1)*u*u;
 }
+
+function joyInput(dt){
+  if(!joy.on)return;
+  const t=joyAsse(joy.timone.x);
+  if(t){
+    // stesse corse dei tasti: 1,15 di barra al secondo, 26° di rotta al secondo
+    if(game.pilot>=2) game.pilotTgt=norm(game.pilotTgt+26*D2R*dt*t);
+    else boat.rudderCmd=clamp(boat.rudderCmd+1.15*dt*t,-1,1);
+  }
+  if(game.auto)return;               // le vele le regola la barca, come per i tasti
+  const rate=50*D2R*dt;
+  const r=joyAsse(joy.vele.y), f=joyAsse(joy.vele.x);
+  if(r) boat.trim=clamp(boat.trim-rate*r,0,90*D2R);          // in su cazza
+  if(f) boat.jib=clamp(boat.jib+rate*f,0,boat.spi?90*D2R:80*D2R);   // a sinistra cazza
+}
+
+function joyMolla(st){
+  st.x=0;st.y=0;st.id=null;
+  const pad=st.pad;
+  if(!pad)return;
+  pad.classList.remove("attivo");
+  joyPomo(pad,0,0);
+}
+function joyPomo(pad,dx,dy){
+  const k=pad.querySelector&&pad.querySelector(".jknob");
+  if(k)k.style.transform="translate("+dx.toFixed(1)+"px,"+dy.toFixed(1)+"px)";
+}
+/* Dal dito al comando: coordinate del pad, centro 0 e bordo ±1, con l'asse
+   verticale girato perché sullo schermo si scende e nei comandi si cazza in
+   su. Sul pad tondo il vettore si ACCORCIA invece di squadrarsi, come una
+   cloche vera: agli angoli i due assi valgono 0,7 per uno e il pomo non
+   esce mai dal cerchio. `soloX` è il timone, che di assi ne ha uno. */
+function joyVettore(dx,dy,hx,hy,soloX){
+  let x=clamp(dx/hx,-1,1), y=soloX?0:clamp(-dy/hy,-1,1);
+  const m=Math.hypot(x,y);
+  if(!soloX&&m>1){x/=m;y/=m;}
+  return {x,y};
+}
+function joyPad(pad,st,soloX){
+  if(!pad)return;
+  st.pad=pad;
+  const POMO=22;                                   // mezzo pomo: il centro non arriva al bordo
+  const leggi=e=>{
+    const r=pad.getBoundingClientRect();
+    const hx=Math.max(1,r.width/2-POMO), hy=Math.max(1,r.height/2-POMO);
+    const v=joyVettore(e.clientX-(r.left+r.width/2),e.clientY-(r.top+r.height/2),hx,hy,soloX);
+    st.x=v.x;st.y=v.y;
+    joyPomo(pad,v.x*hx,-v.y*hy);
+  };
+  pad.addEventListener("pointerdown",e=>{
+    e.preventDefault();st.id=e.pointerId;
+    if(pad.setPointerCapture)pad.setPointerCapture(e.pointerId);
+    pad.classList.add("attivo");leggi(e);
+  });
+  pad.addEventListener("pointermove",e=>{ if(st.id===e.pointerId){e.preventDefault();leggi(e);} });
+  const su=e=>{ if(st.id===null||st.id===e.pointerId) joyMolla(st); };
+  pad.addEventListener("pointerup",su);
+  pad.addEventListener("pointercancel",su);
+  pad.addEventListener("lostpointercapture",su);
+}
+
+const joyEl=document.getElementById("joy"), padsEl=document.getElementById("jpads");
+joyPad(document.getElementById("jtimone"),joy.timone,true);
+joyPad(document.getElementById("jvele"),joy.vele,false);
+// la pulsantiera manda gli stessi comandi della tastiera: sul telefono è
+// l'unico modo di dare C, Z, T e compagnia
+document.querySelectorAll("#jaz button").forEach(b=>{
+  b.addEventListener("click",e=>{e.preventDefault();b.blur&&b.blur();comando(b.dataset.k);});
+});
+
+// finestra che perde il fuoco: come per i tasti, niente resta premuto
+addEventListener("blur",()=>{joyMolla(joy.timone);joyMolla(joy.vele);});
+
+function joyAttiva(on){
+  joy.on=!!on;
+  if(joy.on)document.body.classList.add("joy");
+  else document.body.classList.remove("joy");
+  joyMolla(joy.timone);joyMolla(joy.vele);
+}
+/* Coi pannelli aperti — giornale, aiuto, conferma — il ciclo è fermo e i
+   comandi non comanderebbero niente: meglio toglierli di mezzo che
+   lasciarli lì a raccogliere dita. La carta è il caso a parte: i pad non
+   servono, ma la pulsantiera sì, perché è l'unico modo di richiudere la
+   carta su un telefono — non c'è nessun tasto C da premere.
+   Si guarda una volta per fotogramma e si scrive nel DOM solo quando
+   cambia davvero. */
+let joyVisto=null, padVisti=null;
+function joyVista(){
+  const v=joy.on&&!helpEl.classList.contains("on")
+          &&!logEl.classList.contains("on")&&!askEl.classList.contains("on");
+  const pad=v&&!chart.on;
+  if(v!==joyVisto){
+    joyVisto=v;
+    if(joyEl)joyEl.style.display=v?"":"none";
+  }
+  if(pad!==padVisti){
+    padVisti=pad;
+    if(!pad){joyMolla(joy.timone);joyMolla(joy.vele);}
+    if(padsEl)padsEl.style.display=pad?"":"none";
+  }
+}
+
+// di serie accesi dove non c'è una tastiera; altrove si accendono dal menù
+const seTocco=(typeof window!=="undefined"&&"ontouchstart" in window)
+            ||(typeof matchMedia==="function"&&matchMedia("(pointer:coarse)").matches);
+const joyChk=document.getElementById("joyon");
+if(joyChk){
+  joyChk.checked=seTocco;
+  joyChk.onchange=e=>{
+    joyAttiva(e.target.checked);e.target.blur();
+    say(joy.on?"Joystick accesi — timone a sinistra, scotte a destra":"Joystick spenti");
+  };
+}
+joyAttiva(seTocco);
 
 /* ══════════════════ disegno ══════════════════ */
 const cv=document.getElementById("cv"), ctx=cv.getContext("2d");
@@ -822,21 +973,65 @@ const cv=document.getElementById("cv"), ctx=cv.getContext("2d");
    trascini sposti la carta, se lasci dov'eri segni un punto di rotta. Il
    confine è 5 px, perché un click non è mai perfettamente fermo. */
 let cliccoCarta=null;
-cv.addEventListener("pointerdown",e=>{ if(chart.on){chart.drag={x:e.offsetX,y:e.offsetY,cx:chart.x,cy:chart.y};cv.setPointerCapture(e.pointerId);
-  cliccoCarta=e.button===0?{x:e.offsetX,y:e.offsetY}:null;} });
-cv.addEventListener("pointermove",e=>{
+/* Pizzico a due dita: sulla carta è l'unico modo di ingrandire senza
+   rotella, e senza di lui il telefono resta bloccato all'inquadratura che
+   trova. Finché ci sono due dita giù non si trascina con una sola e non si
+   segna niente: il punto di rotta lo segnerebbe il dito che si alza per
+   primo, dove capita. Le funzioni sono chiamate dagli ascoltatori ma
+   restano richiamabili a mano, come `rotella(e)`, perché la harness non
+   recapita eventi. */
+const tocchi=new Map();
+let pizzico=null;
+function pizzicoMisura(){
+  const d=[...tocchi.values()];
+  return {d:Math.hypot(d[0].x-d[1].x,d[0].y-d[1].y),
+          cx:(d[0].x+d[1].x)/2, cy:(d[0].y+d[1].y)/2};
+}
+function pizzicoMuovi(){
+  if(tocchi.size<2)return;
+  const s=pizzicoMisura();
+  if(!pizzico){pizzico=s;return;}
+  // il punto di mezzo trascina la carta...
+  chart.x-=(s.cx-pizzico.cx)/chart.z;
+  chart.y-=(s.cy-pizzico.cy)/chart.z;
+  // ...e la distanza fra le dita la ingrandisce, tenendo fermo quel punto
+  const p=c2w(s.cx,s.cy);
+  chart.z=clamp(chart.z*(s.d/Math.max(1,pizzico.d)),Math.min(VW,VH)*0.30/world.size,0.9);
+  const q=c2w(s.cx,s.cy);
+  chart.x+=p.x-q.x;chart.y+=p.y-q.y;
+  pizzico=s;
+}
+function cartaGiu(e){
+  if(!chart.on)return;
+  tocchi.set(e.pointerId,{x:e.offsetX,y:e.offsetY});
+  if(tocchi.size>=2){ pizzico=null;chart.drag=null;cliccoCarta=null;return; }
+  chart.drag={x:e.offsetX,y:e.offsetY,cx:chart.x,cy:chart.y};
+  cliccoCarta=e.button===0?{x:e.offsetX,y:e.offsetY}:null;
+}
+function cartaMuovi(e){
   if(!chart.on)return;
   chart.mx=e.offsetX;chart.my=e.offsetY;
+  if(tocchi.has(e.pointerId))tocchi.set(e.pointerId,{x:e.offsetX,y:e.offsetY});
+  if(tocchi.size>=2){pizzicoMuovi();return;}
   if(chart.drag){chart.x=chart.drag.cx-(e.offsetX-chart.drag.x)/chart.z;
                  chart.y=chart.drag.cy-(e.offsetY-chart.drag.y)/chart.z;}
-});
-cv.addEventListener("pointerup",e=>{
-  if(chart.on&&cliccoCarta&&Math.hypot(e.offsetX-cliccoCarta.x,e.offsetY-cliccoCarta.y)<5){
+}
+function cartaSu(e){
+  const eraPizzico=tocchi.size>=2;
+  tocchi.delete(e.pointerId);
+  if(tocchi.size<2)pizzico=null;
+  if(!eraPizzico&&chart.on&&cliccoCarta
+     &&Math.hypot(e.offsetX-cliccoCarta.x,e.offsetY-cliccoCarta.y)<5){
     const p=c2w(e.offsetX,e.offsetY);pianoClick(p.x,p.y);
   }
   cliccoCarta=null;chart.drag=null;
-});
-cv.addEventListener("pointerleave",()=>{chart.drag=null;cliccoCarta=null;chart.mx=0;});
+}
+cv.addEventListener("pointerdown",e=>{ cartaGiu(e); if(chart.on)cv.setPointerCapture(e.pointerId); });
+cv.addEventListener("pointermove",cartaMuovi);
+cv.addEventListener("pointerup",cartaSu);
+cv.addEventListener("pointercancel",cartaSu);
+cv.addEventListener("pointerleave",e=>{tocchi.delete(e.pointerId);if(tocchi.size<2)pizzico=null;
+  chart.drag=null;cliccoCarta=null;chart.mx=0;});
 let VW=0,VH=0,DPR=1;
 function resize(){
   DPR=Math.min(devicePixelRatio||1,2);
@@ -1135,7 +1330,51 @@ function label(t,x,y){ctx.fillStyle=C("--chart-dim");ctx.font="10px ui-monospace
 function value(t,x,y,col,size){ctx.fillStyle=col||C("--chart");
   ctx.font=(size||16)+"px ui-monospace,monospace";ctx.textAlign="left";ctx.fillText(t,x,y);}
 
+/* ── impaginazione degli strumenti ──
+   Gli strumenti sono disegnati a coordinate fisse, pensate per la finestra
+   di un computer. Su un telefono in verticale quelle stesse coordinate si
+   accavallano: la rosa dei venti finisce sopra il pannello della velocità,
+   la carta ridotta sotto le scotte, e i pulsanti di comando sopra tutto.
+
+   Invece di ritoccare cento coordinate si stringe il contesto e si finge
+   una finestra più larga: `hudScala()` è il fattore, e dentro `drawHUD()`
+   VW e VH sono da lì in poi quelle FINTE. Chi disegna in coordinate di
+   schermo vere dentro quella scala — la freccia della boa fuori campo —
+   deve dividere per la scala, ed è l'unico posto dove serve ricordarsene.
+
+   Il minimo di 0,72 non è arbitrario: sotto quella soglia le scritte da
+   10 px diventano illeggibili, quindi da lì in giù non si stringe più ma
+   si toglie roba — rosa più piccola e carta ridotta via, che a quelle
+   larghezze non ci sta comunque. */
+function hudScala(){ return clamp(Math.min(VW/760,VH/560),0.72,1); }
+/* La soglia di «schermo stretto» è in pixel VERI e non finti perché la
+   divide con il foglio di stile: sotto i 640 px il menù diventa una fascia
+   e il pulsante ☰ passa in alto a destra, dove la rosa deve fargli posto.
+   Se cambia qui, cambia la @media di index.html. La usa anche la carta
+   nautica, che di suo non passa da hudBox(). */
+function schermoStretto(){ return VW<640; }
+function hudBox(){
+  const hs=hudScala();
+  const W=VW/hs, H=VH/hs;               // schermo in unità degli strumenti
+  const stretto=schermoStretto();
+  const rosa=stretto?56:76;
+  const bh=178, bw=stretto?clamp(W-28,306,470):306;
+  const fondo=H-joyInset()/hs;          // sopra i joystick, dove le dita non arrivano
+  const ry=rosa+26+(stretto?42:0);      // la rosa scende sotto il pulsante ☰
+  // la carta ridotta si disegna solo se ci sta davvero: nella colonna di
+  // destra deve entrare tutta sotto la scritta del vento apparente, e col
+  // telefono per il lungo quello spazio non c'è
+  const cartina=!stretto && fondo-(ry+rosa+40) > 196;
+  return {hs,W,H,fondo,stretto,
+          rosa,rx:W-(rosa+26),ry,
+          bx:14,by:fondo-bh-14,bw,bh,              // scotte, bilanciamento e timone
+          cartina};
+}
+
 function drawHUD(){
+  const box=hudBox();
+  ctx.save();ctx.scale(box.hs,box.hs);
+  const VW=box.W, VH=box.H;             // finestra finta: vedi hudBox()
   const w=windAt(boat.x,boat.y);
   const sp=Math.hypot(boat.vx,boat.vy), kn=sp*1.94384;
   const twa=norm(norm(w.from)-boat.h);
@@ -1162,9 +1401,12 @@ function drawHUD(){
   ctx.fillText(pointOfSail(twa),px+pw-12,py+112);
 
   /* ── rosa dei venti, in alto a destra */
-  const cxr=VW-102, cyr=102, R=76;
+  const cxr=box.rx, cyr=box.ry, R=box.rosa;
   ctx.save();ctx.translate(cxr,cyr);
-  ctx.fillStyle="rgba(8,32,46,.80)";ctx.beginPath();ctx.arc(0,0,R+14,0,TAU);ctx.fill();
+  // rk: la rosa dei venti si rimpicciolisce tutta insieme sugli schermi
+  // stretti — tacche, freccia e barchetta in proporzione al raggio
+  const rk=R/76;
+  ctx.fillStyle="rgba(8,32,46,.80)";ctx.beginPath();ctx.arc(0,0,R+14*rk,0,TAU);ctx.fill();
   ctx.strokeStyle="rgba(243,234,212,.22)";ctx.lineWidth=1;ctx.stroke();
   // corona graduata orientata a prua
   ctx.save();ctx.rotate(-boat.h);
@@ -1172,18 +1414,20 @@ function drawHUD(){
     const p=dv(a*D2R), big=a%90===0;
     ctx.strokeStyle=big?"rgba(243,234,212,.75)":"rgba(243,234,212,.3)";
     ctx.lineWidth=big?1.6:1;
-    ctx.beginPath();ctx.moveTo(p.x*R,p.y*R);ctx.lineTo(p.x*(R-(big?11:6)),p.y*(R-(big?11:6)));ctx.stroke();
+    ctx.beginPath();ctx.moveTo(p.x*R,p.y*R);ctx.lineTo(p.x*(R-(big?11:6)*rk),p.y*(R-(big?11:6)*rk));ctx.stroke();
   }
-  ctx.fillStyle="rgba(243,234,212,.8)";ctx.font="10px ui-monospace,monospace";ctx.textAlign="center";ctx.textBaseline="middle";
-  ["N","E","S","W"].forEach((s,i)=>{const p=dv(i*90*D2R);ctx.fillText(s,p.x*(R-22),p.y*(R-22));});
+  ctx.fillStyle="rgba(243,234,212,.8)";ctx.font=(rk<1?9:10)+"px ui-monospace,monospace";
+  ctx.textAlign="center";ctx.textBaseline="middle";
+  ["N","E","S","W"].forEach((s,i)=>{const p=dv(i*90*D2R);ctx.fillText(s,p.x*(R-22*rk),p.y*(R-22*rk));});
   // freccia vento reale (da dove viene)
   const wp=dv(w.from);
-  ctx.strokeStyle=C("--accent");ctx.lineWidth=2.5;
-  ctx.beginPath();ctx.moveTo(wp.x*(R-2),wp.y*(R-2));ctx.lineTo(wp.x*22,wp.y*22);ctx.stroke();
+  ctx.strokeStyle=C("--accent");ctx.lineWidth=2.5*rk;
+  ctx.beginPath();ctx.moveTo(wp.x*(R-2),wp.y*(R-2));ctx.lineTo(wp.x*22*rk,wp.y*22*rk);ctx.stroke();
   ctx.fillStyle=C("--accent");
   const wn=dv(w.from+Math.PI/2);
-  ctx.beginPath();ctx.moveTo(wp.x*20,wp.y*20);
-  ctx.lineTo(wp.x*34+wn.x*7,wp.y*34+wn.y*7);ctx.lineTo(wp.x*34-wn.x*7,wp.y*34-wn.y*7);ctx.closePath();ctx.fill();
+  ctx.beginPath();ctx.moveTo(wp.x*20*rk,wp.y*20*rk);
+  ctx.lineTo(wp.x*34*rk+wn.x*7*rk,wp.y*34*rk+wn.y*7*rk);
+  ctx.lineTo(wp.x*34*rk-wn.x*7*rk,wp.y*34*rk-wn.y*7*rk);ctx.closePath();ctx.fill();
   // settore proibito
   ctx.fillStyle="rgba(232,177,61,.12)";
   ctx.beginPath();ctx.moveTo(0,0);
@@ -1194,22 +1438,23 @@ function drawHUD(){
   ctx.strokeStyle="rgba(243,234,212,.55)";ctx.lineWidth=1.4;ctx.setLineDash([3,3]);
   ctx.beginPath();ctx.moveTo(ap.x*(R-6),ap.y*(R-6));ctx.lineTo(0,0);ctx.stroke();ctx.setLineDash([]);
   // barchetta al centro con la vela
+  const pr=18*rk, pp=10*rk, pl=6*rk;
   ctx.fillStyle="rgba(243,234,212,.9)";
-  ctx.beginPath();ctx.moveTo(0,-18);ctx.lineTo(6,10);ctx.lineTo(-6,10);ctx.closePath();ctx.fill();
+  ctx.beginPath();ctx.moveTo(0,-pr);ctx.lineTo(pl,pp);ctx.lineTo(-pl,pp);ctx.closePath();ctx.fill();
   const bp=dv(boat.boomDraw), jp=dv(boat.jibDraw);
-  ctx.lineWidth=2.5;
+  ctx.lineWidth=2.5*rk;
   ctx.strokeStyle=boat.luff>0.5?C("--warn"):C("--good");
-  ctx.beginPath();ctx.moveTo(0,-4);ctx.lineTo(bp.x*17,-4+bp.y*17);ctx.stroke();
-  ctx.lineWidth=1.8;
+  ctx.beginPath();ctx.moveTo(0,-4*rk);ctx.lineTo(bp.x*17*rk,-4*rk+bp.y*17*rk);ctx.stroke();
+  ctx.lineWidth=1.8*rk;
   ctx.strokeStyle=boat.luffJ>0.5?C("--warn"):C("--good");
-  ctx.beginPath();ctx.moveTo(0,-18);ctx.lineTo(jp.x*13,-18+jp.y*13);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,-pr);ctx.lineTo(jp.x*13*rk,-pr+jp.y*13*rk);ctx.stroke();
   ctx.textBaseline="alphabetic";
   ctx.restore();
   ctx.fillStyle=C("--chart-dim");ctx.font="9px ui-monospace,monospace";ctx.textAlign="center";
-  ctx.fillText("VENTO APP "+Math.round(Math.abs(boat.beta*R2D))+"°"+(boat.beta>0?" DRITTA":" SIN"),cxr,cyr+R+30);
+  ctx.fillText("VENTO APP "+Math.round(Math.abs(boat.beta*R2D))+"°"+(boat.beta>0?" DRITTA":" SIN"),cxr,cyr+R+22*rk+8);
 
   /* ── regolazione / timone / sbandamento, in basso a sinistra */
-  const bw=306, bh=178, bx=14, by=VH-bh-14;
+  const bw=box.bw, bh=box.bh, bx=box.bx, by=box.by;
   panel(bx,by,bw,bh);
   const gw=bw-24, gx=bx+12;
   function sailGauge(name,y,trimRad,W,st,extra){
@@ -1274,7 +1519,7 @@ function drawHUD(){
 
   // barra: comando (fantasma) e pala reale
   label("TIMONE",gx,by+140);
-  const rx=gx+58, rw2=104;
+  const rx=gx+58, rw2=Math.min(104,gw-178);
   ctx.strokeStyle="rgba(243,234,212,.25)";ctx.beginPath();
   ctx.moveTo(rx,by+136);ctx.lineTo(rx+rw2,by+136);ctx.stroke();
   ctx.fillStyle="rgba(243,234,212,.25)";ctx.fillRect(rx+rw2/2-.5,by+132,1,8);
@@ -1283,7 +1528,7 @@ function drawHUD(){
   // cavallino: il neutro a cui tornano i comandi, sotto la scala
   if(Math.abs(boat.rudderTrim)>0.005){ctx.fillStyle=C("--accent");
     ctx.fillRect(rx+rw2/2+boat.rudderTrim*rw2/2-1,by+143,2,5);}
-  label("SBAND.",gx+186,by+140);
+  label("SBAND.",gx+gw-120,by+140);
   ctx.fillStyle=Math.abs(boat.heel)>0.7?C("--accent"):C("--chart");
   ctx.font="13px ui-monospace,monospace";ctx.textAlign="right";
   ctx.fillText(Math.round(Math.abs(boat.heel)*32)+"°",gx+gw,by+141);ctx.textAlign="left";
@@ -1304,8 +1549,10 @@ function drawHUD(){
     ctx.fillText("VENTO "+Math.round(Math.abs(game.pilotTgt*R2D))+"° "+(game.pilotTgt>0?"DRITTA":"SIN"),gx+gw,by+164);}
   else{ctx.fillStyle=C("--chart-dim");ctx.fillText("SPENTO  ·  Z PER INSERIRE",gx+gw,by+164);}
   ctx.textAlign="left";
-  /* ── carta ridotta, in basso a destra */
-  const ms=168, mx=VW-ms-14, my2=VH-ms-14;
+  /* ── carta ridotta, in basso a destra — su schermo stretto non ci sta e
+     non si disegna: la carta intera è a un tasto (C) o a un pulsante */
+  if(box.cartina){
+  const ms=168, mx=VW-ms-14, my2=box.fondo-ms-14;
   panel(mx,my2,ms,ms);
   const k=ms/(world.size*1.06), c=world.size*0.53-0;
   ctx.save();ctx.beginPath();ctx.rect(mx,my2,ms,ms);ctx.clip();
@@ -1328,6 +1575,7 @@ function drawHUD(){
   const bs=world.size/40;
   ctx.beginPath();ctx.moveTo(0,-bs);ctx.lineTo(bs*0.6,bs*0.73);ctx.lineTo(-bs*0.6,bs*0.73);ctx.closePath();ctx.fill();
   ctx.restore();ctx.restore();
+  }
 
   /* ── regata, in alto a destra sotto la rosa */
   const ry=14, tw=176;
@@ -1345,8 +1593,11 @@ function drawHUD(){
     const br=(angOf(m.x-boat.x,m.y-boat.y)*R2D+360)%360;
     ctx.textAlign="left";ctx.font="10px ui-monospace,monospace";ctx.fillStyle=C("--chart-dim");
     ctx.fillText("RILEV "+String(Math.round(br)).padStart(3,"0")+"°   "+(d<1000?Math.round(d)+" m":(d/1000).toFixed(2)+" km"),tp+12,ryy+58);
-    // freccia sul bordo se la boa è fuori campo
-    const sx=VW/2+(m.x-cam.x)*game.zoom, sy=VH/2+(m.y-cam.y)*game.zoom;
+    // freccia sul bordo se la boa è fuori campo. Qui si mescolano due
+    // sistemi: la boa sta in coordinate di schermo VERE, gli strumenti in
+    // quelle finte di hudBox(), quindi lo zoom va diviso per la scala.
+    const zh=game.zoom/box.hs;
+    const sx=VW/2+(m.x-cam.x)*zh, sy=VH/2+(m.y-cam.y)*zh;
     if(sx<40||sx>VW-40||sy<40||sy>VH-40){
       const a=Math.atan2(sy-VH/2,sx-VW/2);
       const ex=VW/2+Math.cos(a)*Math.min(VW/2-46,VH/2-46), ey=VH/2+Math.sin(a)*Math.min(VW/2-46,VH/2-46);
@@ -1359,7 +1610,9 @@ function drawHUD(){
 
   /* ── traversata in corso */
   if(voy&&voy.moving){
-    const tw2=176, tx=14, ty=py+ph+10;
+    // sotto gli strumenti, e sotto la regata quando anche lei è finita a
+    // sinistra per mancanza di spazio: prima i due pannelli si sovrapponevano
+    const tw2=176, tx=14, ty=py+ph+10+(tp===px?74:0);
     panel(tx,ty,tw2,voy.ghost?62:46);
     label("TRAVERSATA",tx+12,ty+16);
     ctx.textAlign="right";ctx.font="10px ui-monospace,monospace";ctx.fillStyle=C("--chart-dim");
@@ -1421,7 +1674,9 @@ function drawHUD(){
   /* ── in panne: istruzioni che restano finché servono */
   if((boat.stuck>2.5||boat.gtime>2.5) && !game.paused){
     const ag=boat.gtime>2.5;
-    const pw2=330, px2=VW/2-pw2/2, py2=VH*0.60;
+    // a metà schermo, ma mai addosso al pannello delle scotte: su un
+    // telefono il fondo si alza e i due si sovrapporrebbero
+    const pw2=Math.min(330,VW-28), px2=VW/2-pw2/2, py2=Math.min(VH*0.60,box.by-106);
     panel(px2,py2,pw2,96);
     ctx.textAlign="left";ctx.font="11px ui-monospace,monospace";
     ctx.fillStyle=C("--accent");
@@ -1448,9 +1703,13 @@ function drawHUD(){
     ctx.globalAlpha=clamp(game.msgT,0,1);
     ctx.textAlign="center";ctx.font="13px ui-monospace,monospace";
     const tw2=ctx.measureText(game.msg).width+28;
-    ctx.fillStyle="rgba(8,32,46,.88)";ctx.fillRect(VW/2-tw2/2,VH-64,tw2,30);
-    ctx.strokeStyle="rgba(226,102,45,.5)";ctx.strokeRect(VW/2-tw2/2+.5,VH-63.5,tw2-1,29);
-    ctx.fillStyle=C("--chart");ctx.fillText(game.msg,VW/2,VH-44);
+    // gli avvisi stanno sopra i joystick; su schermo stretto anche sopra il
+    // pannello delle scotte, che lì è largo quanto lo schermo e li
+    // nasconderebbe sotto la scala del timone
+    const my3=box.stretto?box.by-38:box.fondo-64;
+    ctx.fillStyle="rgba(8,32,46,.88)";ctx.fillRect(VW/2-tw2/2,my3,tw2,30);
+    ctx.strokeStyle="rgba(226,102,45,.5)";ctx.strokeRect(VW/2-tw2/2+.5,my3+.5,tw2-1,29);
+    ctx.fillStyle=C("--chart");ctx.fillText(game.msg,VW/2,my3+20);
     ctx.globalAlpha=1;
   }
   if(game.paused){
@@ -1458,6 +1717,7 @@ function drawHUD(){
     ctx.fillStyle=C("--chart");ctx.font="16px ui-monospace,monospace";ctx.textAlign="center";
     ctx.fillText("IN PANNA — premi P per riprendere",VW/2,VH/2);
   }
+  ctx.restore();
 }
 
 /* ══════════════════ interfaccia ══════════════════ */
@@ -1545,9 +1805,14 @@ const setEl=document.getElementById("settings"), showEl=document.getElementById(
 function toggleMenu(){
   const hid=setEl.classList.toggle("hidden");
   showEl.classList.toggle("on",hid);
-  document.getElementById("tut").style.top=hid?"46px":"58px";
+  // il tutorial sale di dodici pixel quando il menù si nasconde. Una classe
+  // e non uno stile in linea: su schermo stretto il foglio di stile lo
+  // porta a metà schermo, e uno stile in linea vincerebbe su di lui
+  document.getElementById("tut").classList.toggle("su",hid);
 }
 document.getElementById("hidem").onclick=e=>{e.currentTarget.blur();toggleMenu();};
+// la carta a tutto schermo dal menù: su un telefono non c'è nessun C da premere
+document.getElementById("chartb").onclick=e=>{e.currentTarget.blur();toggleChart();};
 showEl.onclick=toggleMenu;
 document.getElementById("closehelp").onclick=toggleHelp;
 helpEl.addEventListener("pointerdown",e=>{if(e.target===helpEl)toggleHelp();});
@@ -1861,14 +2126,19 @@ function drawChart(){
 
   // etichette del reticolato sui bordi
   ctx.font="9px ui-monospace,monospace";ctx.fillStyle=CHART.dim;
+  // le latitudini partono più in basso su schermo stretto: lassù ci sono le
+  // due righe di intestazione, e ci finivano dentro
+  const yMin=schermoStretto()?72:20;
   for(const L of labels){
     if(L[0]!==null&&L[0]>40&&L[0]<VW-40){ctx.textAlign="center";ctx.fillText(L[2],L[0],14);}
-    if(L[1]!==null&&L[1]>20&&L[1]<VH-20){ctx.textAlign="left";ctx.fillText(L[2],6,L[1]);}
+    if(L[1]!==null&&L[1]>yMin&&L[1]<VH-20){ctx.textAlign="left";ctx.fillText(L[2],6,L[1]);}
   }
 
-  // rosa dei venti con la direzione del vento reale
+  // rosa dei venti con la direzione del vento reale. Su schermo stretto
+  // scende, perché in alto a destra c'è il pulsante ☰ del menù
   const w=windAt(boat.x,boat.y);
-  const rx=VW-78, ry=78;
+  const stretto=schermoStretto();
+  const rx=VW-78, ry=stretto?126:78;
   ctx.strokeStyle=CHART.dim;ctx.lineWidth=1;
   ctx.beginPath();ctx.arc(rx,ry,34,0,TAU);ctx.stroke();
   ctx.beginPath();ctx.arc(rx,ry,26,0,TAU);ctx.stroke();
@@ -1893,7 +2163,9 @@ function drawChart(){
   const nmPer=1852/SCALE_GEO;                    // metri di gioco per miglio reale
   let step=[0.25,0.5,1,2,5,10,20].find(t=>t*nmPer*chart.z>targetPx*0.55)||20;
   const pxs=step*nmPer*chart.z;
-  const bx=24, by=VH-38;
+  // la scala grafica sta sopra la pulsantiera dei joystick, che sulla carta
+  // resta visibile perché è l'unico modo di richiuderla col dito
+  const bx=24, by=VH-38-(joy.on?40:0);
   ctx.strokeStyle=CHART.ink;ctx.lineWidth=1.4;
   ctx.beginPath();ctx.moveTo(bx,by);ctx.lineTo(bx+pxs,by);ctx.stroke();
   for(let i=0;i<=4;i++){const x=bx+pxs*i/4;
@@ -1927,14 +2199,23 @@ function drawChart(){
   ctx.fillStyle=CHART.ink;ctx.font="12px ui-monospace,monospace";
   ctx.fillText(world.name.toUpperCase(),24,32);
   ctx.fillStyle=CHART.dim;ctx.font="9px ui-monospace,monospace";
-  ctx.fillText("SCALA DI GIOCO 1:"+SCALE_GEO+"  ·  TRASCINA PER SPOSTARE  ·  ROTELLA PER INGRANDIRE  ·  C CHIUDE  ·  0 INQUADRA TUTTO",24,46);
+  // due righe di istruzioni: per esteso quando c'è larghezza, in versione
+  // da telefono quando non c'è — dove per giunta si pizzica invece di
+  // girare una rotella e non c'è nessun tasto C da premere
+  ctx.fillText(stretto
+    ? "SCALA 1:"+SCALE_GEO+"  ·  TRASCINA  ·  PIZZICA PER INGRANDIRE  ·  CARTA CHIUDE"
+    : "SCALA DI GIOCO 1:"+SCALE_GEO+"  ·  TRASCINA PER SPOSTARE  ·  ROTELLA PER INGRANDIRE  ·  C CHIUDE  ·  0 INQUADRA TUTTO",24,46);
   // la riga della rotta: come si traccia, e quanto è lunga quella che c'è
   if(piano.pts.length){
     ctx.fillStyle="#1e6e46";
-    ctx.fillText("ROTTA · "+piano.pts.length+(piano.pts.length===1?" PUNTO":" PUNTI")+
-                 " · "+pianoResta().toFixed(2)+" nm DA QUI  ·  CLICCA SU UN PUNTO PER TOGLIERLO  ·  CANC L'ULTIMO  ·  MAIUSC+CANC TUTTA",24,60);
+    ctx.fillText(stretto
+      ? "ROTTA · "+piano.pts.length+" · "+pianoResta().toFixed(2)+" nm DA QUI  ·  TOCCA UN PUNTO PER TOGLIERLO"
+      : "ROTTA · "+piano.pts.length+(piano.pts.length===1?" PUNTO":" PUNTI")+
+        " · "+pianoResta().toFixed(2)+" nm DA QUI  ·  CLICCA SU UN PUNTO PER TOGLIERLO  ·  CANC L'ULTIMO  ·  MAIUSC+CANC TUTTA",24,60);
   }else{
-    ctx.fillText("CLICCA SUL MARE PER SEGNARE UN PUNTO DI ROTTA: LA LINEA RESTA TRATTEGGIATA ANCHE IN NAVIGAZIONE",24,60);
+    ctx.fillText(stretto
+      ? "TOCCA IL MARE PER SEGNARE UN PUNTO DI ROTTA"
+      : "CLICCA SUL MARE PER SEGNARE UN PUNTO DI ROTTA: LA LINEA RESTA TRATTEGGIATA ANCHE IN NAVIGAZIONE",24,60);
   }
   ctx.textBaseline="alphabetic";
 }
@@ -2249,19 +2530,23 @@ function tutUpdate(dt){
 function tutHighlight(){
   if(!tut.on)return;
   const key=TUT[tut.i].hi;if(!key)return;
+  // gli aloni inseguono i pannelli: stessa impaginazione, stessa scala
+  const box=hudBox(), lato=2*(box.rosa+18);
   const P={
-    rose:  [VW-196,10,188,188],
+    rose:  [box.rx-box.rosa-18,box.ry-box.rosa-18,lato,lato],
     instr: [10,10,204,134],
-    sails: [10,VH-196,314,84],
-    balance:[10,VH-118,314,48],
-    rudder:[10,VH-72,314,58]
+    sails: [box.bx-4,box.by-4,box.bw+8,84],
+    balance:[box.bx-4,box.by+74,box.bw+8,48],
+    rudder:[box.bx-4,box.by+120,box.bw+8,58]
   }[key];
   if(!P)return;
   const p=0.5+0.5*Math.sin(game.t*3.2);
+  ctx.save();ctx.scale(box.hs,box.hs);
   ctx.strokeStyle="rgba(226,102,45,"+(0.35+0.5*p).toFixed(2)+")";
   ctx.lineWidth=2;ctx.setLineDash([7,5]);ctx.lineDashOffset=-game.t*14;
   ctx.strokeRect(P[0]+.5,P[1]+.5,P[2],P[3]);
   ctx.setLineDash([]);
+  ctx.restore();
 }
 document.getElementById("tutnext").onclick=e=>{e.currentTarget.blur();tutNext();};
 document.getElementById("tutskip").onclick=e=>{e.currentTarget.blur();tutNext();};
@@ -2273,6 +2558,9 @@ fillBarche();
 newWorld("mantova");
 loadLog();
 helpEl.classList.add("on");
+// su schermo piccolo il menù aperto coprirebbe mezzo mare — in orizzontale
+// tutto: si parte col solo ☰, che è dove il telefono se lo aspetta
+if(innerWidth<640||innerHeight<560) toggleMenu();
 let last=performance.now();
 function frame(now){
   let dt=clamp((now-last)/1000,0,0.05);last=now;   // mai negativo: un timestamp anomalo faceva esplodere la fisica
@@ -2291,6 +2579,7 @@ function frame(now){
     tutUpdate(sdt);
     if(game.msgT>0)game.msgT-=dt;                        // gli avvisi durano in tempo reale
   }
+  joyVista();
   draw();
   requestAnimationFrame(frame);
 }
