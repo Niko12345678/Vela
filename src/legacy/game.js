@@ -817,24 +817,35 @@ function clickDestro(e){
 }
 addEventListener("mousedown",e=>{ if(e.target&&e.target.id==="cv") clickDestro(e); });
 
-/* ══════════════════ joystick ══════════════════
-   Due pad in fondo allo schermo: uno per il timone, uno per le due scotte
-   — asse verticale la randa, asse orizzontale il fiocco. Nascono per il
-   telefono, dove i sei pulsanti di prima erano tutto o niente e coprivano
-   mezzo mare, ma si accendono anche dal menù: chi ha un mouse senza
-   rotella orizzontale non ha nessun altro modo di cazzare il fiocco a
-   dosaggio continuo.
+/* ══════════════════ comandi a dito ══════════════════
+   In fondo allo schermo: a sinistra il pad del TIMONE, a destra due
+   MANOPOLE, una per scotta. Nascono per il telefono, dove i sei pulsanti
+   di prima erano tutto o niente e coprivano mezzo mare, ma si accendono
+   anche dal menù: chi ha un mouse senza rotella orizzontale non ha nessun
+   altro modo di cazzare il fiocco a dosaggio continuo.
 
-   Sono comandi di VELOCITÀ, non di posizione, esattamente come i tasti:
-   quanto sposti il dito decide quanto in fretta si muove la scotta o la
-   barra, e mollando il pad la scotta resta dov'è. Un joystick che tornasse
-   al centro riporterebbe la barra dritta a ogni dito alzato, cioè il
-   contrario della frizione inserita che questa barca ha di serie.
+   I due comandi non sono della stessa natura, perché non lo sono nemmeno
+   a bordo.
 
-   I versi sono quelli che il gioco usa già altrove: in su cazza la randa
-   come la rotella verticale, a sinistra cazza il fiocco come la rotella
-   orizzontale, a destra la barra accosta a dritta come la ruota. */
-const joy={on:false, timone:{x:0,y:0,id:null}, vele:{x:0,y:0,id:null}};
+   Il timone è un comando di VELOCITÀ, come i tasti: quanto sposti il dito
+   decide quanto in fretta si muove la barra, e mollando il pad la barra
+   resta dov'è. Un joystick che tornasse al centro la raddrizzerebbe a ogni
+   dito alzato, cioè il contrario della frizione inserita che questa barca
+   ha di serie.
+
+   Le scotte invece sono POSIZIONE: la manopola è un verricello, e dove sta
+   lei sta la vela. Il primo pad a due assi le dava a velocità come i tasti,
+   ma con la fascia verde dell'ottimo larga pochi gradi si finiva sempre per
+   scavalcarla; girando, invece, ogni punto della corsa ha il suo posto
+   sotto il dito e ci si torna. Due giri interi coprono tutta la corsa —
+   720° di dita per 90° di scotta, otto gradi di manopola per uno di vela.
+   In senso ORARIO si cazza, come si avvolge una cima sul tamburo.
+
+   La manopola non ha uno stato suo: legge e scrive `boat.trim` e
+   `boat.jib`. Così la regolazione automatica (T), i terzaroli e lo
+   spinnaker la muovono da soli, e l'anello esterno mostra sempre dove sta
+   davvero la vela rispetto alla finestra buona. */
+const joy={on:false, timone:{x:0,id:null}};
 const JOY_MORTA=0.10;              // zona morta: il dito appoggiato non governa
 const JOY_ALTA=166, JOY_BASSA=128; // altezza della fascia, gemella di #joy in index.html
 
@@ -861,45 +872,31 @@ function joyInput(dt){
     if(game.pilot>=2) game.pilotTgt=norm(game.pilotTgt+26*D2R*dt*t);
     else boat.rudderCmd=clamp(boat.rudderCmd+1.15*dt*t,-1,1);
   }
-  if(game.auto)return;               // le vele le regola la barca, come per i tasti
-  const rate=50*D2R*dt;
-  const r=joyAsse(joy.vele.y), f=joyAsse(joy.vele.x);
-  if(r) boat.trim=clamp(boat.trim-rate*r,0,90*D2R);          // in su cazza
-  if(f) boat.jib=clamp(boat.jib+rate*f,0,boat.spi?90*D2R:80*D2R);   // a sinistra cazza
 }
 
 function joyMolla(st){
-  st.x=0;st.y=0;st.id=null;
+  st.x=0;st.id=null;
   const pad=st.pad;
   if(!pad)return;
   pad.classList.remove("attivo");
-  joyPomo(pad,0,0);
+  joyPomo(pad,0);
 }
-function joyPomo(pad,dx,dy){
+function joyPomo(pad,dx){
   const k=pad.querySelector&&pad.querySelector(".jknob");
-  if(k)k.style.transform="translate("+dx.toFixed(1)+"px,"+dy.toFixed(1)+"px)";
+  if(k)k.style.transform="translate("+dx.toFixed(1)+"px,0)";
 }
-/* Dal dito al comando: coordinate del pad, centro 0 e bordo ±1, con l'asse
-   verticale girato perché sullo schermo si scende e nei comandi si cazza in
-   su. Sul pad tondo il vettore si ACCORCIA invece di squadrarsi, come una
-   cloche vera: agli angoli i due assi valgono 0,7 per uno e il pomo non
-   esce mai dal cerchio. `soloX` è il timone, che di assi ne ha uno. */
-function joyVettore(dx,dy,hx,hy,soloX){
-  let x=clamp(dx/hx,-1,1), y=soloX?0:clamp(-dy/hy,-1,1);
-  const m=Math.hypot(x,y);
-  if(!soloX&&m>1){x/=m;y/=m;}
-  return {x,y};
-}
-function joyPad(pad,st,soloX){
+/* Dal dito al comando: coordinate del pad, centro 0 e bordo ±1. Il pad del
+   timone ha un asse solo — il verticale non governa niente. */
+function joyVettore(dx,hx){ return clamp(dx/hx,-1,1); }
+function joyPad(pad,st){
   if(!pad)return;
   st.pad=pad;
   const POMO=22;                                   // mezzo pomo: il centro non arriva al bordo
   const leggi=e=>{
     const r=pad.getBoundingClientRect();
-    const hx=Math.max(1,r.width/2-POMO), hy=Math.max(1,r.height/2-POMO);
-    const v=joyVettore(e.clientX-(r.left+r.width/2),e.clientY-(r.top+r.height/2),hx,hy,soloX);
-    st.x=v.x;st.y=v.y;
-    joyPomo(pad,v.x*hx,-v.y*hy);
+    const hx=Math.max(1,r.width/2-POMO);
+    st.x=joyVettore(e.clientX-(r.left+r.width/2),hx);
+    joyPomo(pad,st.x*hx);
   };
   pad.addEventListener("pointerdown",e=>{
     e.preventDefault();st.id=e.pointerId;
@@ -913,9 +910,162 @@ function joyPad(pad,st,soloX){
   pad.addEventListener("lostpointercapture",su);
 }
 
+/* ── le manopole delle scotte ──────────────────────────────────────────
+   Ognuna è una vista su un campo di `boat`: `leggi`/`scrivi` la scotta,
+   `corsa` il suo fine corsa (il fiocco ne ha due, 80° e 90° con lo spi),
+   `finestra` e `stato` quelli che gli strumenti disegnano già in basso a
+   sinistra, così l'anello racconta la stessa storia della barra. */
+const MANO_GIRI=2;                      // giri di manopola per tutta la corsa
+const MANO_ARCO=MANO_GIRI*360;          // gradi di dita per l'intera corsa
+const MANO_MORTO=13;                    // px: vicino al perno l'angolo è rumore
+const MANO_PX=96;                       // lato di ripiego se il DOM non sa dirlo
+
+const manopole=[
+  {id:"mranda", cvId:"mrandacv",
+   nome:()=>boat.reef?"RANDA "+boat.reef+"ª":"RANDA",
+   leggi:()=>boat.trim, scrivi:v=>{boat.trim=v;}, corsa:()=>90*D2R,
+   finestra:()=>boat.wM, stato:()=>boat.stM},
+  {id:"mfiocco", cvId:"mfioccocv",
+   nome:()=>boat.spi?"SPI":"FIOCCO",
+   leggi:()=>boat.jib, scrivi:v=>{boat.jib=v;}, corsa:()=>boat.spi?90*D2R:80*D2R,
+   finestra:()=>boat.wJ, stato:()=>boat.stJ}
+];
+
+/* Gira la manopola di `dg` gradi: in orario si cazza, come sul verricello.
+   A vele automatiche non comanda, esattamente come i tasti e le rotelle. */
+function manopolaGira(m,dg){
+  if(!joy.on||game.auto||!dg)return;
+  const corsa=m.corsa();
+  m.scrivi(clamp(m.leggi()-dg/MANO_ARCO*corsa,0,corsa));
+}
+/* Angolo del dito attorno al perno, in gradi orari (sullo schermo la y
+   cresce in giù, quindi atan2 gira già nel verso dell'orologio). */
+function manoAngolo(dx,dy){ return Math.atan2(dy,dx)*R2D; }
+/* Differenza fra due angoli «srotolata»: passando davanti al fondo scala
+   il salto di 360° va tolto, se no mezzo grado diventa un giro al
+   contrario. Ed è per questo che i giri si possono contare. */
+function manoDelta(a,b){ let d=b-a; if(d>180)d-=360; else if(d<-180)d+=360; return d; }
+
+function manopolaMolla(m){
+  m.presa=false; m.id=null; m.ang=null;
+  if(m.el)m.el.classList.remove("attivo");
+}
+function manopolaPad(m){
+  const el=document.getElementById(m.id);
+  m.el=el; m.cv=document.getElementById(m.cvId);
+  m.presa=false; m.id=null; m.ang=null;
+  if(!el||!el.addEventListener)return;
+  const dito=e=>{
+    const r=el.getBoundingClientRect();
+    return {x:e.clientX-(r.left+r.width/2), y:e.clientY-(r.top+r.height/2)};
+  };
+  el.addEventListener("pointerdown",e=>{
+    e.preventDefault();m.id=e.pointerId;m.presa=true;
+    if(el.setPointerCapture)el.setPointerCapture(e.pointerId);
+    el.classList.add("attivo");
+    const d=dito(e);m.ang=manoAngolo(d.x,d.y);
+  });
+  el.addEventListener("pointermove",e=>{
+    if(m.id!==e.pointerId)return;
+    e.preventDefault();
+    const d=dito(e), a=manoAngolo(d.x,d.y);
+    // il pollice appoggiato sul perno fa angoli a caso: lì non si gira,
+    // ma l'angolo si aggiorna lo stesso o uscendo si prende uno scatto
+    if(m.ang!==null&&Math.hypot(d.x,d.y)>MANO_MORTO) manopolaGira(m,manoDelta(m.ang,a));
+    m.ang=a;
+  });
+  const su=e=>{ if(m.id===null||m.id===e.pointerId) manopolaMolla(m); };
+  el.addEventListener("pointerup",su);
+  el.addEventListener("pointercancel",su);
+  el.addEventListener("lostpointercapture",su);
+}
+
+/* L'anello esterno è la corsa intera della scotta srotolata su 270°, con
+   le stesse fasce della barra degli strumenti: da tutta cazzata (in basso
+   a sinistra) a tutta lascata (in basso a destra). Il corpo della manopola
+   invece gira per davvero, due giri pieni, ed è quello che dà il dosaggio
+   fine. Si ridisegna solo quando qualcosa è cambiato: sono due canvas in
+   più per fotogramma. */
+const MANO_A0=135, MANO_ARC=270;
+function manopolaDisegna(m){
+  const el=m.cv; if(!el||!el.getContext)return;
+  const lato=Math.round(el.clientWidth||MANO_PX);
+  if(lato<10)return;
+  const v=m.leggi(), corsa=m.corsa(), W=m.finestra(), st=m.stato();
+  const u=corsa>0?clamp(v/corsa,0,1):0;
+  const spenta=st==="avvolto"||st==="collo"||st==="sventato";
+  const firma=[lato,DPR,m.nome(),u.toFixed(5),st,game.auto?1:0,m.presa?1:0,
+               W?(W.lo+","+W.hi+","+W.opt+","+W.maxT):""].join("|");
+  if(firma===m.firma)return;
+  m.firma=firma;
+  if(el.width!==Math.round(lato*DPR)){
+    el.width=Math.round(lato*DPR);el.height=Math.round(lato*DPR);
+    el.style.width=lato+"px";el.style.height=lato+"px";
+  }
+  const g=el.getContext("2d");
+  g.setTransform(DPR,0,0,DPR,0,0);
+  g.clearRect(0,0,lato,lato);
+  const cx=lato/2, cy=lato/2, R=lato/2-1;
+  const A=q=>(MANO_A0+MANO_ARC*clamp(q,0,1))*D2R;
+  const arco=(r,q0,q1,col,sp)=>{
+    if(q1<=q0)return;
+    g.beginPath();g.lineWidth=sp;g.strokeStyle=col;
+    g.arc(cx,cy,r,A(q0),A(q1));g.stroke();
+  };
+  const raggio=(q,r0,r1,col,sp)=>{
+    const a=A(q), c=Math.cos(a), s=Math.sin(a);
+    g.beginPath();g.lineWidth=sp;g.strokeStyle=col;
+    g.moveTo(cx+c*r0,cy+s*r0);g.lineTo(cx+c*r1,cy+s*r1);g.stroke();
+  };
+
+  // le tacche, che sono quello che si guarda mentre si gira
+  const rt=R-1;
+  for(let i=0;i<=36;i++){
+    const grossa=i%6===0;
+    raggio(i/36,rt-(grossa?8:5),rt,
+           grossa?"rgba(243,234,212,.45)":"rgba(243,234,212,.22)",grossa?1.6:1);
+  }
+  // le fasce: troppo cazzata, finestra buona, troppo lascata
+  const ra=R-12;
+  if(W&&!spenta){
+    const q=x=>W.maxT>0?clamp(x/W.maxT,0,1):0;
+    arco(ra,0,q(W.lo),"rgba(226,102,45,.26)",5);
+    arco(ra,q(W.lo),q(W.hi),"rgba(127,196,122,.45)",5);
+    arco(ra,q(W.hi),1,"rgba(232,177,61,.28)",5);
+    raggio(q(W.opt),ra-3,ra+3,"rgba(127,196,122,.95)",1.4);
+  }else{
+    arco(ra,0,1,"rgba(243,234,212,.09)",5);
+  }
+  // dove sta la scotta adesso
+  raggio(u,ra-6,ra+6,spenta?"rgba(243,234,212,.35)":C("--chart"),2.6);
+
+  // il corpo, che gira due giri interi da tutta cazzata a tutta lascata
+  const ri=R*0.56;
+  const gr=g.createRadialGradient(cx-ri*0.4,cy-ri*0.5,ri*0.1,cx,cy,ri);
+  gr.addColorStop(0,"rgba(30,74,97,.98)");
+  gr.addColorStop(1,"rgba(8,32,46,.98)");
+  g.beginPath();g.fillStyle=gr;g.arc(cx,cy,ri,0,TAU);g.fill();
+  g.beginPath();g.lineWidth=1;
+  g.strokeStyle=m.presa?C("--accent"):"rgba(243,234,212,.30)";
+  g.arc(cx,cy,ri,0,TAU);g.stroke();
+  const fi=(-90-MANO_ARCO*u)*D2R;                     // cazzando gira in orario
+  g.beginPath();
+  g.fillStyle=game.auto?C("--accent"):(spenta?"rgba(243,234,212,.35)":C("--chart"));
+  g.arc(cx+Math.cos(fi)*ri*0.6,cy+Math.sin(fi)*ri*0.6,ri*0.17,0,TAU);g.fill();
+
+  // gradi al centro, nome nello spicchio libero in basso
+  g.textAlign="center";g.textBaseline="middle";
+  g.fillStyle=spenta?"rgba(243,234,212,.4)":C("--chart");
+  g.font=Math.round(lato*0.15)+"px ui-monospace,monospace";
+  g.fillText(Math.round(v*R2D)+"°",cx,cy+ri*0.02);
+  g.font="8px ui-monospace,monospace";
+  g.fillStyle=game.auto?C("--accent"):C("--chart-dim");
+  g.fillText(game.auto?"AUTO":m.nome(),cx,cy+R*0.82);
+}
+
 const joyEl=document.getElementById("joy"), padsEl=document.getElementById("jpads");
-joyPad(document.getElementById("jtimone"),joy.timone,true);
-joyPad(document.getElementById("jvele"),joy.vele,false);
+joyPad(document.getElementById("jtimone"),joy.timone);
+manopole.forEach(manopolaPad);
 // la pulsantiera manda gli stessi comandi della tastiera: sul telefono è
 // l'unico modo di dare C, Z, T e compagnia
 document.querySelectorAll("#jaz button").forEach(b=>{
@@ -923,13 +1073,13 @@ document.querySelectorAll("#jaz button").forEach(b=>{
 });
 
 // finestra che perde il fuoco: come per i tasti, niente resta premuto
-addEventListener("blur",()=>{joyMolla(joy.timone);joyMolla(joy.vele);});
+addEventListener("blur",()=>{joyMolla(joy.timone);manopole.forEach(manopolaMolla);});
 
 function joyAttiva(on){
   joy.on=!!on;
   if(joy.on)document.body.classList.add("joy");
   else document.body.classList.remove("joy");
-  joyMolla(joy.timone);joyMolla(joy.vele);
+  joyMolla(joy.timone);manopole.forEach(manopolaMolla);
 }
 /* Coi pannelli aperti — giornale, aiuto, conferma — il ciclo è fermo e i
    comandi non comanderebbero niente: meglio toglierli di mezzo che
@@ -949,9 +1099,10 @@ function joyVista(){
   }
   if(pad!==padVisti){
     padVisti=pad;
-    if(!pad){joyMolla(joy.timone);joyMolla(joy.vele);}
+    if(!pad){joyMolla(joy.timone);manopole.forEach(manopolaMolla);}
     if(padsEl)padsEl.style.display=pad?"":"none";
   }
+  if(pad)manopole.forEach(manopolaDisegna);
 }
 
 // di serie accesi dove non c'è una tastiera; altrove si accendono dal menù
@@ -962,7 +1113,8 @@ if(joyChk){
   joyChk.checked=seTocco;
   joyChk.onchange=e=>{
     joyAttiva(e.target.checked);e.target.blur();
-    say(joy.on?"Joystick accesi — timone a sinistra, scotte a destra":"Joystick spenti");
+    say(joy.on?"Comandi a dito accesi — timone a sinistra, manopole delle scotte a destra"
+              :"Comandi a dito spenti");
   };
 }
 joyAttiva(seTocco);

@@ -1,15 +1,19 @@
-/* I COMANDI COL DITO — joystick, pulsantiera e pizzico sulla carta.
+/* I COMANDI COL DITO — pad del timone, manopole delle scotte, pulsantiera
+ * e pizzico sulla carta.
  *
  * Sul telefono i sei pulsanti di prima erano tutto o niente: o la scotta
  * stava ferma o correva a 50°/s, e la fascia verde dell'ottimo è larga
- * pochi gradi. I due pad danno la stessa corsa massima delle frecce e
- * tutto quello che c'è sotto, quindi qui si collauda soprattutto *quanto*
- * si muovono e *da che parte*.
+ * pochi gradi. Il pad del timone dà la stessa corsa massima delle frecce e
+ * tutto quello che c'è sotto, quindi lì si collauda *quanto* si muove e
+ * *da che parte*; le manopole delle scotte sono di posizione e non di
+ * velocità, quindi lì si collauda il rapporto — due giri per tutta la
+ * corsa — e che i giri si contino davvero.
  *
- * Come per le rotelle, la harness non recapita eventi: si scrive negli
- * assi (`joy.timone.x`, `joy.vele`) e si chiama `input(dt)`, che è
- * esattamente quello che fa il ciclo di gioco; per la carta si chiamano a
- * mano `cartaGiu/Muovi/Su`, come si fa con `rotella(e)`. La fisica non è
+ * Come per le rotelle, la harness non recapita eventi: si scrive nell'asse
+ * (`joy.timone.x`) e si chiama `input(dt)`, che è esattamente quello che fa
+ * il ciclo di gioco, oppure si gira la manopola con `manopolaGira`, che è
+ * quello che fa il gestore del puntatore; per la carta si chiamano a mano
+ * `cartaGiu/Muovi/Su`, come si fa con `rotella(e)`. La fisica non è
  * coinvolta — si guardano solo i comandi — quindi la golden test non ne
  * risente.
  */
@@ -62,54 +66,92 @@ test("il joystick del timone è una freccia che si può dosare", async () => {
   assert.equal(r.fondoCorsa, 1, "la barra si ferma a fine corsa");
 });
 
-test("il pad delle vele: in verticale la randa, in orizzontale il fiocco", async () => {
+test("le manopole delle scotte: due giri da tutta cazzata a tutta lascata", async () => {
   const r = await runInGame(`
     ${MONDO}
     ${PRONTI}
     const gradi = v => v*R2D;
-    pronti(); joy.vele.y=1;  input(0.2); const randaSu=gradi(boat.trim), fioccoFermo1=boat.jib;
-    pronti(); joy.vele.y=-1; input(0.2); const randaGiu=gradi(boat.trim);
-    pronti(); joy.vele.x=-1; input(0.2); const fioccoSin=gradi(boat.jib), randaFerma=boat.trim;
-    pronti(); joy.vele.x=1;  input(0.2); const fioccoDes=gradi(boat.jib);
-    // le due scotte insieme, come sa fare solo un pad a due assi
-    pronti(); joy.vele.x=-1; joy.vele.y=1; input(0.2);
-    const insieme={randa:gradi(boat.trim), fiocco:gradi(boat.jib)};
-    // stessa corsa dei tasti: 50°/s a fondo corsa
-    pronti(); keys["arrowup"]=1; input(0.2); const conFreccia=gradi(boat.trim);
-    // fine corsa delle scotte
-    pronti(); joy.vele.y=1;  for(let i=0;i<20;i++) input(0.2); const tuttaCazzata=gradi(boat.trim);
-    pronti(); joy.vele.y=-1; for(let i=0;i<20;i++) input(0.2); const tuttaLascata=gradi(boat.trim);
-    report({ randaSu, randaGiu, fioccoSin, fioccoDes, fioccoFermo1, randaFerma,
-             insieme, conFreccia, tuttaCazzata, tuttaLascata });
+    const randa=manopole[0], fiocco=manopole[1];
+    // un quarto di giro in orario: 90° di dita su 720° di corsa, cioè un
+    // ottavo dei 90° della randa
+    pronti(); manopolaGira(randa,90);
+    const cazzata=gradi(boat.trim), fioccoFermo=boat.jib;
+    pronti(); manopolaGira(randa,-90); const lascata=gradi(boat.trim);
+    // il fiocco ha una corsa più corta, 80°: lo stesso quarto di giro vale meno
+    pronti(); manopolaGira(fiocco,90);
+    const fioccoCazzato=gradi(boat.jib), randaFerma=boat.trim;
+    pronti(); manopolaGira(fiocco,-90); const fioccoLascato=gradi(boat.jib);
+    // con lo spinnaker la corsa arriva a 90°, e il rapporto cambia con lei
+    pronti(); boat.spi=true; manopolaGira(fiocco,90); const conSpi=gradi(boat.jib);
+    // due giri interi coprono tutta la corsa, né più né meno
+    pronti(); boat.trim=90*D2R; manopolaGira(randa,720); const dueGiri=gradi(boat.trim);
+    // e oltre il fine corsa non si sfonda
+    pronti(); manopolaGira(randa,5000); const tuttaCazzata=gradi(boat.trim);
+    pronti(); manopolaGira(randa,-5000); const tuttaLascata=gradi(boat.trim);
+    report({ cazzata, lascata, fioccoCazzato, fioccoLascato, conSpi, fioccoFermo,
+             randaFerma, dueGiri, tuttaCazzata, tuttaLascata });
   `);
 
-  assert.ok(Math.abs(r.randaSu - 35) < 1e-9, `in su cazza la randa: 45° → ${r.randaSu.toFixed(1)}°`);
-  assert.ok(Math.abs(r.randaGiu - 55) < 1e-9, `in giù la lasca: 45° → ${r.randaGiu.toFixed(1)}°`);
-  assert.ok(Math.abs(r.fioccoSin - 25) < 1e-9,
-    `a sinistra cazza il fiocco, come la rotella orizzontale: 35° → ${r.fioccoSin.toFixed(1)}°`);
-  assert.ok(Math.abs(r.fioccoDes - 45) < 1e-9, `a destra lo lasca: 35° → ${r.fioccoDes.toFixed(1)}°`);
-  assert.equal(r.fioccoFermo1, 35 * Math.PI / 180, "l'asse verticale non tocca il fiocco");
-  assert.equal(r.randaFerma, 45 * Math.PI / 180, "e l'orizzontale non tocca la randa");
-  assert.ok(Math.abs(r.insieme.randa - 35) < 1e-9 && Math.abs(r.insieme.fiocco - 25) < 1e-9,
-    "in diagonale si cazzano tutte e due insieme");
-  assert.ok(Math.abs(r.conFreccia - r.randaSu) < 1e-12,
-    "a fondo corsa il pad vale la freccia tenuta premuta");
+  assert.ok(Math.abs(r.cazzata - 33.75) < 1e-9,
+    `in orario si cazza, 8° di manopola per 1° di vela: 45° → ${r.cazzata.toFixed(2)}°`);
+  assert.ok(Math.abs(r.lascata - 56.25) < 1e-9,
+    `in antiorario si lasca della stessa quantità: 45° → ${r.lascata.toFixed(2)}°`);
+  assert.ok(Math.abs(r.fioccoCazzato - 25) < 1e-9,
+    `il fiocco ha 80° di corsa, quindi un quarto di giro ne vale 10 (${r.fioccoCazzato.toFixed(2)}°)`);
+  assert.ok(Math.abs(r.fioccoLascato - 45) < 1e-9, "e altrettanti dall'altra parte");
+  assert.ok(Math.abs(r.conSpi - 23.75) < 1e-9,
+    `con lo spi la corsa è 90° e il quarto di giro ne vale 11,25 (${r.conSpi.toFixed(2)}°)`);
+  assert.equal(r.fioccoFermo, 35 * Math.PI / 180, "la manopola della randa non tocca il fiocco");
+  assert.equal(r.randaFerma, 45 * Math.PI / 180, "e quella del fiocco non tocca la randa");
+  assert.equal(r.dueGiri, 0, "due giri interi portano da tutta lascata a tutta cazzata");
   assert.equal(r.tuttaCazzata, 0, "la randa si ferma tutta cazzata");
   assert.ok(Math.abs(r.tuttaLascata - 90) < 1e-9, "e tutta lascata a 90°");
 });
 
-test("il joystick rispetta chi comanda: autotimoniere e vele automatiche", async () => {
+test("girando si contano i giri: il salto a ±180° non conta come mezzo giro", async () => {
+  const r = await runInGame(`
+    ${MONDO}
+    ${PRONTI}
+    // l'angolo del dito attorno al perno: sullo schermo la y cresce in giù,
+    // quindi si gira già nel verso dell'orologio
+    const su=manoAngolo(0,-10), destra=manoAngolo(10,0), giu=manoAngolo(0,10);
+    // passando davanti al fondo scala il salto di 360° va tolto
+    const avanti=manoDelta(170,-170), indietro=manoDelta(-170,170);
+    const fermo=manoDelta(45,45);
+    // un giro intero in otto passi, come farebbe un dito che gira davvero:
+    // deve valere mezza corsa della randa, non un pasticcio di segni
+    pronti();
+    let a=manoAngolo(0,-10);
+    for(let i=1;i<=8;i++){
+      const t=(-90+i*45)*D2R, b=manoAngolo(Math.cos(t)*10,Math.sin(t)*10);
+      manopolaGira(manopole[0],manoDelta(a,b)); a=b;
+    }
+    const unGiro=boat.trim*R2D;
+    report({ su, destra, giu, avanti, indietro, fermo, unGiro });
+  `);
+
+  assert.equal(r.su, -90, "in alto sono −90°");
+  assert.equal(r.destra, 0, "a destra 0°");
+  assert.equal(r.giu, 90, "in basso +90°: l'angolo cresce in senso orario");
+  assert.equal(r.avanti, 20, "davanti al fondo scala il giro continua in avanti");
+  assert.equal(r.indietro, -20, "e all'indietro all'indietro");
+  assert.equal(r.fermo, 0, "fermo è fermo");
+  assert.ok(Math.abs(r.unGiro - 0) < 1e-9,
+    `un giro intero in orario vale mezza corsa: 45° → ${r.unGiro.toFixed(2)}°`);
+});
+
+test("i comandi a dito rispettano chi comanda: autotimoniere e vele automatiche", async () => {
   const r = await runInGame(`
     ${MONDO}
     ${PRONTI}
     // con l'autotimoniere su ROTTA si sposta la rotta impostata, non la barra
     pronti(); game.pilot=2; joy.timone.x=1; input(0.2);
     const rotta=game.pilotTgt*R2D, barraConPilota=boat.rudderCmd;
-    // a vele automatiche le scotte non si toccano, ma si governa lo stesso
-    pronti(); game.auto=true; joy.vele.y=1; joy.timone.x=1; input(0.2);
+    // a vele automatiche la manopola non comanda, ma si governa lo stesso
+    pronti(); game.auto=true; manopolaGira(manopole[0],180); joy.timone.x=1; input(0.2);
     const randaAuto=boat.trim, barraAuto=boat.rudderCmd;
-    // spento dal menù, il pad non comanda niente nemmeno se resta sporco
-    pronti(); joyAttiva(false); joy.timone.x=1; joy.vele.y=1; input(0.2);
+    // spenti dal menù non comandano niente nemmeno se l'asse resta sporco
+    pronti(); joyAttiva(false); joy.timone.x=1; input(0.2); manopolaGira(manopole[0],180);
     const spento={barra:boat.rudderCmd, randa:boat.trim};
     joyAttiva(false);
     report({ rotta, barraConPilota, randaAuto, barraAuto, spento });
@@ -118,34 +160,25 @@ test("il joystick rispetta chi comanda: autotimoniere e vele automatiche", async
   assert.ok(Math.abs(r.rotta - 26 * 0.2) < 1e-9,
     `a fondo corsa la rotta accosta come con le frecce, 26°/s (${r.rotta.toFixed(2)}°)`);
   assert.equal(r.barraConPilota, 0, "con l'autotimoniere inserito la barra non la muovi tu");
-  assert.equal(r.randaAuto, 45 * Math.PI / 180, "a vele automatiche il pad non tocca le scotte");
+  assert.equal(r.randaAuto, 45 * Math.PI / 180, "a vele automatiche la manopola non gira le scotte");
   assert.ok(r.barraAuto > 0, "ma il timone resta in mano al marinaio");
-  assert.equal(r.spento.barra, 0, "col joystick spento la barra sta ferma");
+  assert.equal(r.spento.barra, 0, "coi comandi a dito spenti la barra sta ferma");
   assert.equal(r.spento.randa, 45 * Math.PI / 180, "e le scotte pure");
 });
 
-test("il pad tondo è una cloche: agli angoli il vettore si accorcia", async () => {
+test("il pad del timone: mezza corsa a metà, e fuori dal pad non si va oltre", async () => {
   const r = await runInGame(`
     ${MONDO}
-    // il dito nell'angolo in alto a sinistra di un pad da 120 px
-    const angolo=joyVettore(-60,-60,38,38,false);
-    const destra=joyVettore(60,0,38,38,false);
-    const oltre=joyVettore(400,-400,38,38,false);
-    // il timone ha un asse solo: il verticale non lo tocca
-    const timone=joyVettore(60,-60,42,20,true);
-    report({ angolo, destra, oltre, timone,
-             modAngolo:Math.hypot(angolo.x,angolo.y), modOltre:Math.hypot(oltre.x,oltre.y) });
+    // un pad da 126 px: mezza larghezza utile 42
+    const meta=joyVettore(21,42), fondo=joyVettore(42,42), oltre=joyVettore(400,42);
+    const sinistra=joyVettore(-400,42);
+    report({ meta, fondo, oltre, sinistra });
   `);
 
-  assert.ok(Math.abs(r.modAngolo - 1) < 1e-9,
-    `in diagonale il vettore resta lungo 1, non 1,41 (${r.modAngolo.toFixed(3)})`);
-  assert.ok(Math.abs(r.angolo.x + 0.7071) < 1e-3 && Math.abs(r.angolo.y - 0.7071) < 1e-3,
-    "e i due assi valgono 0,7 per uno — a sinistra cazza, in su cazza");
-  assert.ok(Math.abs(r.destra.x - 1) < 1e-9 && r.destra.y === 0,
-    "sull'asse il fondo corsa resta pieno");
-  assert.ok(Math.abs(r.modOltre - 1) < 1e-9, "e fuori dal pad non si va oltre");
-  assert.ok(Math.abs(r.timone.x - 1) < 1e-9 && r.timone.y === 0,
-    "il pad del timone ignora il verticale");
+  assert.ok(Math.abs(r.meta - 0.5) < 1e-9, "a metà pad l'asse vale mezzo");
+  assert.equal(r.fondo, 1, "al bordo è pieno");
+  assert.equal(r.oltre, 1, "e fuori dal pad non si va oltre");
+  assert.equal(r.sinistra, -1, "dall'altra parte lo stesso, col segno opposto");
 });
 
 test("la pulsantiera dà gli stessi comandi della tastiera", async () => {
