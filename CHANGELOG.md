@@ -10,6 +10,43 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
 ## Non rilasciato
 
 ### Cambiato
+- **Anche il timone è a posizione, e un doppio tocco lo rimette dritto.**
+  Restava l'ultimo comando a velocità: si spingeva il pomo e la barra
+  cominciava a scorrere, così per metterla a metà bisognava spingere,
+  guardare l'indicatore e mollare al momento giusto, e per un colpo di
+  barra improvviso — quello che serve quando la prua è già partita —
+  toccava tenere il dito premuto e aspettare. Ora **il pomo è la barra**:
+  dove lo metti sta la pala, tutta a dritta in un gesto solo, e il pomo è
+  lo stesso segno chiaro dell'indicatore TIMONE. La corrispondenza è
+  **lineare** apposta: una risposta quadratica, buona per una velocità,
+  qui vorrebbe dire un pomo che non sta dove sta la barra. Vicino al
+  centro c'è un piccolo scatto sul dritto (±0,05 di corsa), perché a mano
+  libera lo zero esatto non si trova ed è la posizione che serve più
+  spesso. Mollando il dito la barra resta dov'è, come prima: la frizione
+  inserita non è cambiata, è cambiato cosa vuol dire spostare il dito.
+  Il **doppio tocco sul pad** rimette la barra dritta, cioè al cavallino
+  se ce n'è uno e disinserendo l'autotimoniere: è `centraBarra`, lo stesso
+  di Spazio e del doppio click destro sul mare, gemello col dito di un
+  gesto che col mouse c'era già. I due tocchi si contano a mano con la
+  finestra di sistema (350 ms) e il tempo lo dà l'evento, come là: il
+  browser `dblclick` col dito non lo manda. Il secondo tocco raddrizza e
+  basta, senza muovere anche la barra, se no il gesto la rimetterebbe
+  storta dove è capitato il dito.
+  Il pomo ora **segue la barra anche quando non lo tocchi**: tasti,
+  rotella, cavallino e autotimoniere la muovono per conto loro, e un pomo
+  fermo mentre la barra si sposta sarebbe una bugia. Unica eccezione, il
+  pad col **pilota inserito su rotta o vento**: lì la barra non è in mano
+  tua, il pad torna a essere un joystick che gira la rotta impostata a
+  26°/s e si ricentra mollando il dito — i gradi di bussola non hanno un
+  fine corsa su cui appoggiare una posizione, e dal telefono è l'unico
+  modo di correggere la rotta. È rimasto l'unico pezzo di input che ha
+  ancora bisogno di girare dentro `input()`.
+- `test/joystick.test.js`: il pad del timone a posizione (metà pad = metà
+  barra, lo scatto al centro, venti passi di tempo che non la spostano di
+  un grado, mollata resta dov'era), il doppio tocco (uno solo no, il terzo
+  non fa coppia, due tocchi lontani nemmeno, col cavallino torna al
+  cavallino, col pilota lo disinserisce, spento non fa niente) e il pad col
+  pilota inserito, che alimenta l'asse e non la barra.
 - **Le scotte si regolano con due manopole, non più col pad a due assi.**
   Il pad destro chiedeva di tenere a mente due assi contemporaneamente —
   verticale la randa, orizzontale il fiocco — e dava *velocità*: per

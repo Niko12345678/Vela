@@ -34,36 +34,98 @@ const pronti = () => {
 };
 `;
 
-test("il joystick del timone è una freccia che si può dosare", async () => {
+test("il pad del timone è la barra: dove sta il pomo sta la pala", async () => {
   const r = await runInGame(`
     ${MONDO}
     ${PRONTI}
-    pronti(); keys["arrowright"]=1; input(0.2);  const conFreccia=boat.rudderCmd;
-    pronti(); joy.timone.x=1;       input(0.2);  const aFondo=boat.rudderCmd;
-    pronti(); joy.timone.x=0.5;     input(0.2);  const aMeta=boat.rudderCmd;
-    pronti(); joy.timone.x=-1;      input(0.2);  const aSinistra=boat.rudderCmd;
-    // il dito appoggiato al centro non deve governare
-    pronti(); joy.timone.x=0.08;    input(0.2);  const appoggiato=boat.rudderCmd;
+    pronti(); timoneBarra(1);     const aFondo=boat.rudderCmd;
+    pronti(); timoneBarra(0.5);   const aMeta=boat.rudderCmd;
+    pronti(); timoneBarra(-1);    const aSinistra=boat.rudderCmd;
+    pronti(); timoneBarra(3);     const oltre=boat.rudderCmd;
+    // vicino al centro la barra si incastra sul dritto
+    pronti(); timoneBarra(0.03);  const appoggiato=boat.rudderCmd;
+    // il tempo non c'entra più niente: la barra sta dove l'hai messa
+    pronti(); timoneBarra(0.4); for(let i=0;i<20;i++) input(0.2);
+    const dopoVentiPassi=boat.rudderCmd;
+    // e mollando il dito resta lì: la frizione è inserita
+    pronti(); timoneBarra(0.7); joyMolla(joy.timone); const mollata=boat.rudderCmd;
     // il pad del timone non tocca le scotte
-    pronti(); joy.timone.x=1;       input(0.2);
+    pronti(); timoneBarra(1); input(0.2);
     const scotteFerme = boat.trim===45*D2R && boat.jib===35*D2R;
-    // e a fine corsa si ferma, non sfonda
-    pronti(); joy.timone.x=1; for(let i=0;i<20;i++) input(0.2);
-    const fondoCorsa=boat.rudderCmd;
-    report({ conFreccia, aFondo, aMeta, aSinistra, appoggiato, scotteFerme, fondoCorsa });
+    report({ aFondo, aMeta, aSinistra, oltre, appoggiato, dopoVentiPassi, mollata, scotteFerme });
   `);
 
-  assert.ok(Math.abs(r.aFondo - r.conFreccia) < 1e-12,
-    `a fondo corsa il pad vale una freccia tenuta premuta (${r.aFondo.toFixed(3)} contro ${r.conFreccia.toFixed(3)})`);
-  assert.ok(r.aFondo > 0, "a destra la barra va a dritta");
-  assert.ok(Math.abs(r.aSinistra + r.aFondo) < 1e-12, "a sinistra della stessa quantità");
-  // risposta quadratica: a metà corsa un quarto, non la metà. È quello che
-  // rende il primo terzo del pad buono per cercare la fascia verde.
-  assert.ok(r.aMeta > 0 && r.aMeta < r.aFondo * 0.35,
-    `a metà corsa si muove molto meno della metà (${r.aMeta.toFixed(4)} contro ${(r.aFondo/2).toFixed(4)})`);
-  assert.equal(r.appoggiato, 0, "dentro la zona morta non si governa");
+  assert.equal(r.aFondo, 1, "a fondo corsa la barra è tutta a dritta");
+  assert.equal(r.aMeta, 0.5, "a metà pad è a metà: il pomo è la barra, senza curve di mezzo");
+  assert.equal(r.aSinistra, -1, "dall'altra parte tutta a sinistra");
+  assert.equal(r.oltre, 1, "e fuori dal pad non si sfonda");
+  assert.equal(r.appoggiato, 0, "vicino al centro si incastra sul dritto");
+  assert.equal(r.dopoVentiPassi, 0.4, "la barra non scorre col tempo: è una posizione");
+  assert.equal(r.mollata, 0.7, "mollando il dito resta dov'era, non si ricentra");
   assert.ok(r.scotteFerme, "il pad del timone non deve toccare le scotte");
-  assert.equal(r.fondoCorsa, 1, "la barra si ferma a fine corsa");
+});
+
+test("doppio tocco sul pad: barra dritta, come Spazio", async () => {
+  const r = await runInGame(`
+    ${MONDO}
+    ${PRONTI}
+    const tocco = t => timoneDoppio({timeStamp:t});
+    // due tocchi ravvicinati raddrizzano; uno solo no
+    pronti(); timoneBarra(0.8); const uno=tocco(1000), barraUno=boat.rudderCmd;
+    const due=tocco(1200), barraDue=boat.rudderCmd;
+    // il terzo tocco non fa una seconda coppia con quello di prima
+    const tre=tocco(1400), barraTre=boat.rudderCmd;
+    // lontani nel tempo non sono un doppio tocco
+    pronti(); timoneBarra(0.8); tocco(2000); tocco(3000); const lontani=boat.rudderCmd;
+    // col cavallino preso torna al cavallino, non a zero, come Spazio
+    pronti(); boat.rudderTrim=0.2; timoneBarra(0.8); tocco(4000); tocco(4100);
+    const alCavallino=boat.rudderCmd;
+    // e con l'autotimoniere inserito lo disinserisce, come Spazio
+    pronti(); game.pilot=2; tocco(5000); tocco(5100); const pilota=game.pilot;
+    // spento dal menù non raddrizza niente
+    pronti(); joyAttiva(false); boat.rudderCmd=0.8; tocco(6000); tocco(6100);
+    const spento=boat.rudderCmd;
+    joyAttiva(false);
+    report({ uno, due, tre, barraUno, barraDue, barraTre, lontani, alCavallino, pilota, spento });
+  `);
+
+  assert.equal(r.uno, false, "un tocco solo non è un doppio tocco");
+  assert.equal(r.barraUno, 0.8, "e non tocca la barra");
+  assert.equal(r.due, true, "il secondo tocco ravvicinato sì");
+  assert.equal(r.barraDue, 0, "e rimette la barra dritta");
+  assert.equal(r.tre, false, "il terzo tocco non fa coppia col secondo");
+  assert.equal(r.barraTre, 0, "la barra resta dritta");
+  assert.equal(r.lontani, 0.8, "due tocchi lontani nel tempo non raddrizzano");
+  assert.equal(r.alCavallino, 0.2, "col cavallino preso la barra torna al cavallino, come Spazio");
+  assert.equal(r.pilota, 0, "e l'autotimoniere si disinserisce, sempre come Spazio");
+  assert.equal(r.spento, 0.8, "coi comandi a dito spenti il doppio tocco non raddrizza");
+});
+
+test("col pilota inserito il pad torna un joystick: gira la rotta e si ricentra", async () => {
+  const r = await runInGame(`
+    ${MONDO}
+    ${PRONTI}
+    // su ROTTA il pad non scrive più sulla barra: alimenta l'asse
+    pronti(); game.pilot=2; timoneBarra(1);
+    const asse=joy.timone.x, barra=boat.rudderCmd;
+    input(0.2); const rotta=game.pilotTgt*R2D;
+    // a metà corsa un quarto, e il dito appoggiato non governa
+    pronti(); game.pilot=2; timoneBarra(0.5); input(0.2); const aMeta=game.pilotTgt*R2D;
+    pronti(); game.pilot=2; timoneBarra(0.08); input(0.2); const appoggiato=game.pilotTgt;
+    // mollando, l'asse si ricentra: la rotta smette di girare
+    pronti(); game.pilot=2; timoneBarra(1); joyMolla(joy.timone);
+    input(0.2); const dopoMollato=game.pilotTgt;
+    report({ asse, barra, rotta, aMeta, appoggiato, dopoMollato });
+  `);
+
+  assert.equal(r.asse, 1, "col pilota il pad alimenta l'asse");
+  assert.equal(r.barra, 0, "e non la barra, che non è più in mano tua");
+  assert.ok(Math.abs(r.rotta - 26 * 0.2) < 1e-9,
+    `a fondo corsa la rotta gira come con le frecce, 26°/s (${r.rotta.toFixed(2)}°)`);
+  assert.ok(r.aMeta > 0 && r.aMeta < r.rotta * 0.35,
+    `a metà corsa gira molto meno della metà (${r.aMeta.toFixed(3)}° contro ${r.rotta.toFixed(2)}°)`);
+  assert.equal(r.appoggiato, 0, "dentro la zona morta non si governa");
+  assert.equal(r.dopoMollato, 0, "mollato il dito la rotta sta ferma");
 });
 
 test("le manopole delle scotte: due giri da tutta cazzata a tutta lascata", async () => {
@@ -140,28 +202,22 @@ test("girando si contano i giri: il salto a ±180° non conta come mezzo giro", 
     `un giro intero in orario vale mezza corsa: 45° → ${r.unGiro.toFixed(2)}°`);
 });
 
-test("i comandi a dito rispettano chi comanda: autotimoniere e vele automatiche", async () => {
+test("i comandi a dito rispettano chi comanda: vele automatiche e interruttore", async () => {
   const r = await runInGame(`
     ${MONDO}
     ${PRONTI}
-    // con l'autotimoniere su ROTTA si sposta la rotta impostata, non la barra
-    pronti(); game.pilot=2; joy.timone.x=1; input(0.2);
-    const rotta=game.pilotTgt*R2D, barraConPilota=boat.rudderCmd;
     // a vele automatiche la manopola non comanda, ma si governa lo stesso
-    pronti(); game.auto=true; manopolaGira(manopole[0],180); joy.timone.x=1; input(0.2);
+    pronti(); game.auto=true; manopolaGira(manopole[0],180); timoneBarra(0.6);
     const randaAuto=boat.trim, barraAuto=boat.rudderCmd;
-    // spenti dal menù non comandano niente nemmeno se l'asse resta sporco
-    pronti(); joyAttiva(false); joy.timone.x=1; input(0.2); manopolaGira(manopole[0],180);
+    // spenti dal menù non comanda niente né il pad né le manopole
+    pronti(); joyAttiva(false); timoneBarra(1); manopolaGira(manopole[0],180);
     const spento={barra:boat.rudderCmd, randa:boat.trim};
     joyAttiva(false);
-    report({ rotta, barraConPilota, randaAuto, barraAuto, spento });
+    report({ randaAuto, barraAuto, spento });
   `);
 
-  assert.ok(Math.abs(r.rotta - 26 * 0.2) < 1e-9,
-    `a fondo corsa la rotta accosta come con le frecce, 26°/s (${r.rotta.toFixed(2)}°)`);
-  assert.equal(r.barraConPilota, 0, "con l'autotimoniere inserito la barra non la muovi tu");
   assert.equal(r.randaAuto, 45 * Math.PI / 180, "a vele automatiche la manopola non gira le scotte");
-  assert.ok(r.barraAuto > 0, "ma il timone resta in mano al marinaio");
+  assert.equal(r.barraAuto, 0.6, "ma il timone resta in mano al marinaio");
   assert.equal(r.spento.barra, 0, "coi comandi a dito spenti la barra sta ferma");
   assert.equal(r.spento.randa, 45 * Math.PI / 180, "e le scotte pure");
 });

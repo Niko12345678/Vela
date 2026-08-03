@@ -824,16 +824,17 @@ addEventListener("mousedown",e=>{ if(e.target&&e.target.id==="cv") clickDestro(e
    anche dal menù: chi ha un mouse senza rotella orizzontale non ha nessun
    altro modo di cazzare il fiocco a dosaggio continuo.
 
-   I due comandi non sono della stessa natura, perché non lo sono nemmeno
-   a bordo.
+   Sono tutti comandi di POSIZIONE, come le cose vere che imitano.
 
-   Il timone è un comando di VELOCITÀ, come i tasti: quanto sposti il dito
-   decide quanto in fretta si muove la barra, e mollando il pad la barra
-   resta dov'è. Un joystick che tornasse al centro la raddrizzerebbe a ogni
-   dito alzato, cioè il contrario della frizione inserita che questa barca
-   ha di serie.
+   Il pad del timone è la barra: dove sta il pomo sta la pala, e il pomo è
+   lo stesso segno chiaro che si vede sull'indicatore TIMONE. Mollando il
+   dito resta dov'era — non si ricentra da solo, che è la frizione inserita
+   che questa barca ha di serie — e un doppio tocco la rimette dritta, come
+   Spazio e come il doppio click destro sul mare: il centro esatto, col
+   dito, non si trova. Il pomo segue anche quello che fanno tasti, rotella
+   e autotimoniere, perché la barra è una sola.
 
-   Le scotte invece sono POSIZIONE: la manopola è un verricello, e dove sta
+   Le scotte sono manopole: girando, la manopola è un verricello e dove sta
    lei sta la vela. Il primo pad a due assi le dava a velocità come i tasti,
    ma con la fascia verde dell'ottimo larga pochi gradi si finiva sempre per
    scavalcarla; girando, invece, ogni punto della corsa ha il suo posto
@@ -844,19 +845,27 @@ addEventListener("mousedown",e=>{ if(e.target&&e.target.id==="cv") clickDestro(e
    La manopola non ha uno stato suo: legge e scrive `boat.trim` e
    `boat.jib`. Così la regolazione automatica (T), i terzaroli e lo
    spinnaker la muovono da soli, e l'anello esterno mostra sempre dove sta
-   davvero la vela rispetto alla finestra buona. */
+   davvero la vela rispetto alla finestra buona.
+
+   L'unica eccezione è il pad col PILOTA inserito su rotta o vento: lì la
+   barra non è più in mano tua, e il pad torna a essere un joystick a
+   velocità che gira la rotta impostata e si ricentra mollando il dito. I
+   gradi di bussola non hanno un fine corsa su cui appoggiare una
+   posizione, e dal telefono è l'unico modo di correggere la rotta. */
 const joy={on:false, timone:{x:0,id:null}};
 const JOY_MORTA=0.10;              // zona morta: il dito appoggiato non governa
+const JOY_SNAP=0.05;               // vicino al centro la barra si incastra sul dritto
+const JOY_POMO=22;                 // mezzo pomo: il centro non arriva mai al bordo
 const JOY_ALTA=166, JOY_BASSA=128; // altezza della fascia, gemella di #joy in index.html
 
 /* Quanto spazio si prendono i joystick in fondo allo schermo. Gli strumenti
    si alzano di altrettanto: sotto le dita non ci si legge niente. */
 function joyInset(){ return joy.on?(VH<520?JOY_BASSA:JOY_ALTA):0; }
 
-/* Zona morta e risposta quadratica. La quadratica non è un vezzo: a metà
-   corsa vale un quarto, quindi il primo terzo del pad regola fine come la
-   rotella a 1/5, e il fondo corsa va veloce quanto una freccia tenuta
-   premuta. Con una risposta lineare la fascia verde si scavalca sempre. */
+/* Zona morta e risposta quadratica, per il pad quando gira la rotta del
+   pilota: il dito appoggiato non deve governare, a metà corsa si va a un
+   quarto — quindi il primo terzo regola di grado in grado — e il fondo
+   corsa vale una freccia tenuta premuta. */
 function joyAsse(v){
   const m=Math.abs(clamp(v,-1,1));
   if(m<=JOY_MORTA)return 0;
@@ -864,42 +873,75 @@ function joyAsse(v){
   return (v<0?-1:1)*u*u;
 }
 
+/* Col pilota su ROTTA o VENTO il pad cambia mestiere: vedi in testa alla
+   sezione. È l'unico pezzo di input rimasto a velocità, e per questo
+   l'unico che ha ancora bisogno di girare dentro `input()`. */
+function timonePilota(){ return game.pilot>=2; }
+
 function joyInput(dt){
-  if(!joy.on)return;
+  if(!joy.on||!timonePilota())return;
   const t=joyAsse(joy.timone.x);
-  if(t){
-    // stesse corse dei tasti: 1,15 di barra al secondo, 26° di rotta al secondo
-    if(game.pilot>=2) game.pilotTgt=norm(game.pilotTgt+26*D2R*dt*t);
-    else boat.rudderCmd=clamp(boat.rudderCmd+1.15*dt*t,-1,1);
-  }
+  if(t) game.pilotTgt=norm(game.pilotTgt+26*D2R*dt*t);  // 26°/s, la corsa delle frecce
+}
+
+/* Il pad al comando. A barra in mano è posizione piena: lineare, perché il
+   pomo dev'essere la barra e non una sua funzione, con un piccolo scatto al
+   centro — a mano libera il dritto esatto non si trova, e il timone dritto
+   è la posizione che serve più spesso. */
+function timoneAsse(v){ const q=clamp(v,-1,1); return Math.abs(q)<=JOY_SNAP?0:q; }
+function timoneBarra(q){
+  if(!joy.on)return;
+  if(timonePilota()) joy.timone.x=clamp(q,-1,1);        // velocità: la rotta gira finché tieni il dito
+  else boat.rudderCmd=timoneAsse(q);                    // posizione: dove sta il dito sta la barra
+}
+
+/* Doppio tocco sul pad: barra dritta, come Spazio e come il doppio click
+   destro sul mare — stesso `centraBarra`, stessa conferma a voce. Su un
+   comando di posizione serve più che altrove, ed è il gemello col dito di
+   un gesto che col mouse c'era già. I due tocchi si contano a mano come
+   là: `dblclick` col dito non arriva, e il tempo lo dà l'evento perché
+   così la funzione si può collaudare. */
+let ultimoTimone=-1e9;
+function timoneDoppio(e){
+  const doppio=e.timeStamp-ultimoTimone<=DOPPIO_MS;
+  ultimoTimone=doppio?-1e9:e.timeStamp;         // il terzo tocco non fa una seconda coppia
+  if(!doppio||!joy.on)return false;
+  const conPilota=game.pilot;
+  centraBarra(false);
+  if(!conPilota&&!boat.rudderTrim) say("Barra dritta");
+  return true;
 }
 
 function joyMolla(st){
   st.x=0;st.id=null;
-  const pad=st.pad;
-  if(!pad)return;
-  pad.classList.remove("attivo");
-  joyPomo(pad,0);
+  if(st.pad)st.pad.classList.remove("attivo");
+  timoneVisto=null;                  // il pomo lo rimette al suo posto timoneVista()
 }
 function joyPomo(pad,dx){
   const k=pad.querySelector&&pad.querySelector(".jknob");
   if(k)k.style.transform="translate("+dx.toFixed(1)+"px,0)";
 }
-/* Dal dito al comando: coordinate del pad, centro 0 e bordo ±1. Il pad del
-   timone ha un asse solo — il verticale non governa niente. */
+/* Dal dito al comando: coordinate del pad, centro 0 e bordo ±1. Il pad ha
+   un asse solo — il verticale non governa niente. */
 function joyVettore(dx,hx){ return clamp(dx/hx,-1,1); }
+function joyMezzo(pad){
+  const r=pad.getBoundingClientRect&&pad.getBoundingClientRect();
+  return r?Math.max(1,r.width/2-JOY_POMO):1;
+}
 function joyPad(pad,st){
   if(!pad)return;
   st.pad=pad;
-  const POMO=22;                                   // mezzo pomo: il centro non arriva al bordo
   const leggi=e=>{
     const r=pad.getBoundingClientRect();
-    const hx=Math.max(1,r.width/2-POMO);
-    st.x=joyVettore(e.clientX-(r.left+r.width/2),hx);
-    joyPomo(pad,st.x*hx);
+    timoneBarra(joyVettore(e.clientX-(r.left+r.width/2),joyMezzo(pad)));
+    timoneVista();
   };
   pad.addEventListener("pointerdown",e=>{
-    e.preventDefault();st.id=e.pointerId;
+    e.preventDefault();
+    // il secondo tocco raddrizza e basta: se muovesse anche la barra, il
+    // gesto finirebbe per rimetterla storta dove è capitato il dito
+    if(timoneDoppio(e)){joyMolla(st);return;}
+    st.id=e.pointerId;
     if(pad.setPointerCapture)pad.setPointerCapture(e.pointerId);
     pad.classList.add("attivo");leggi(e);
   });
@@ -908,6 +950,19 @@ function joyPad(pad,st){
   pad.addEventListener("pointerup",su);
   pad.addEventListener("pointercancel",su);
   pad.addEventListener("lostpointercapture",su);
+}
+
+/* Il pomo è la barra: senza un dito sopra segue i tasti, la rotella, il
+   cavallino e l'autotimoniere, che la muovono per conto loro. Col pilota
+   inserito segue invece l'asse, che è un joystick e sta al centro da fermo.
+   Si guarda una volta per fotogramma e si scrive solo quando cambia. */
+let timoneVisto=null;
+function timoneVista(){
+  const pad=joy.timone.pad; if(!pad)return;
+  const q=timonePilota()?joy.timone.x:clamp(boat.rudderCmd,-1,1);
+  if(q===timoneVisto)return;
+  timoneVisto=q;
+  joyPomo(pad,q*joyMezzo(pad));
 }
 
 /* ── le manopole delle scotte ──────────────────────────────────────────
@@ -1102,7 +1157,7 @@ function joyVista(){
     if(!pad){joyMolla(joy.timone);manopole.forEach(manopolaMolla);}
     if(padsEl)padsEl.style.display=pad?"":"none";
   }
-  if(pad)manopole.forEach(manopolaDisegna);
+  if(pad){timoneVista();manopole.forEach(manopolaDisegna);}
 }
 
 // di serie accesi dove non c'è una tastiera; altrove si accendono dal menù
