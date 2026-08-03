@@ -114,9 +114,10 @@
   #helpbox td:first-child{width:170px;white-space:nowrap;padding-right:14px}
   #helpbox p{margin:6px 0;color:#ded3ba}
 
-  /* ── comandi a joystick ───────────────────────────────────────────
-     Due pad e una pulsantiera in fondo allo schermo: col dito sul
-     telefono, col mouse per chi non ha la rotella orizzontale.
+  /* ── comandi a dito ───────────────────────────────────────────────
+     Pad del timone, manopole delle scotte e pulsantiera in fondo allo
+     schermo: col dito sul telefono, col mouse per chi non ha la rotella
+     orizzontale.
      L'ALTEZZA È UN CONTRATTO: gli strumenti disegnati sul canvas si
      alzano di altrettanto per non finire sotto le dita. Se cambia qui,
      cambiano JOY_ALTA e JOY_BASSA in game.js. */
@@ -130,12 +131,18 @@
     background:rgba(8,32,46,.62);border:1px solid rgba(243,234,212,.28);
     user-select:none;-webkit-user-select:none;flex:none}
   #jtimone{width:126px;height:76px;border-radius:38px}
-  #jvele{width:120px;height:120px;border-radius:50%}
   .jknob{position:absolute;width:44px;height:44px;border-radius:50%;pointer-events:none;
     background:rgba(243,234,212,.20);border:1px solid rgba(243,234,212,.45)}
   .jpad.attivo .jknob{background:rgba(226,102,45,.55);border-color:var(--accent)}
   .jpad::before{content:"";position:absolute;width:56%;height:1px;background:rgba(243,234,212,.14)}
-  #jvele::after{content:"";position:absolute;width:1px;height:56%;background:rgba(243,234,212,.14)}
+  /* Le manopole delle scotte: il disegno lo fa game.js su questi canvas,
+     qui c'è solo il posto che occupano e la presa del dito. */
+  #jvele{display:flex;align-items:flex-end;gap:10px}
+  .mano{position:relative;width:96px;height:96px;flex:none;border-radius:50%;
+    touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none;
+    background:rgba(8,32,46,.62);border:1px solid rgba(243,234,212,.28)}
+  .mano.attivo{border-color:var(--accent);cursor:grabbing}
+  .mano canvas{width:100%;height:100%}
   .jax{position:absolute;font-size:8px;letter-spacing:.12em;
     color:rgba(243,234,212,.5);pointer-events:none;white-space:nowrap}
   .jax-y{top:6px} .jax-x{bottom:5px}
@@ -164,11 +171,14 @@
   }
   @media (max-width:400px){
     #jaz button{font-size:8px;letter-spacing:0;padding:6px 0}
+    /* su 320 px il pad e due manopole devono starci in fila */
+    .mano{width:78px;height:78px}
+    #jvele{gap:7px}
   }
   @media (max-height:520px){
     #joy{height:128px;padding-bottom:6px;gap:4px}
     #jtimone{width:110px;height:60px;border-radius:30px}
-    #jvele{width:92px;height:92px}
+    .mano{width:74px;height:74px}
     .jknob{width:36px;height:36px}
     #jaz button{padding:4px 1px}
   }
@@ -188,7 +198,7 @@
   <label><input id="easy" type="checkbox" checked> Mare facile</label>
   <label>Passo rotelle <select id="wstep"><option value="1" selected>1×</option><option value="0.5">1/2</option><option value="0.2">1/5</option><option value="0.1">1/10</option></select></label>
   <label><input id="winv" type="checkbox"> Rotelle invertite</label>
-  <label><input id="joyon" type="checkbox"> Joystick</label>
+  <label><input id="joyon" type="checkbox"> Comandi a dito</label>
   <button id="tutb">Tutorial</button>
   <button id="gen">Nuova mappa</button>
   <button id="reset">Riporta al via</button>
@@ -213,9 +223,13 @@
     <div class="jpad" id="jtimone" title="Timone — a destra accosta a dritta, come la ruota">
       <div class="jknob"></div><span class="jax jax-x">↔ TIMONE</span>
     </div>
-    <div class="jpad" id="jvele" title="Vele — in su cazza la randa, a sinistra cazza il fiocco">
-      <div class="jknob"></div>
-      <span class="jax jax-y">↕ RANDA</span><span class="jax jax-x">↔ FIOCCO</span>
+    <div id="jvele">
+      <div class="mano" id="mranda" title="Randa — gira in senso orario per cazzare. Due giri interi da tutta cazzata a tutta lascata">
+        <canvas id="mrandacv"></canvas>
+      </div>
+      <div class="mano" id="mfiocco" title="Fiocco (o spinnaker) — gira in senso orario per cazzare. Due giri interi da tutta cazzata a tutta lascata">
+        <canvas id="mfioccocv"></canvas>
+      </div>
     </div>
   </div>
 </div>
@@ -300,19 +314,24 @@
       <tr><td><kbd>L</kbd></td><td>Giornale di bordo</td></tr>
       <tr><td><kbd>M</kbd></td><td>Nascondi / mostra il menù in alto</td></tr>
       <tr><td><kbd>R</kbd> · <kbd>N</kbd> · <kbd>P</kbd> · <kbd>H</kbd></td><td>Riparti · nuova mappa · pausa · questa schermata</td></tr>
-      <tr><td>Joystick sinistro</td><td><strong>Timone</strong> · a destra accosta a dritta, come la ruota</td></tr>
-      <tr><td>Joystick destro</td><td><strong>Vele</strong> · in su cazza la randa, a sinistra cazza il fiocco. In diagonale tutte e due insieme</td></tr>
+      <tr><td>Pad a sinistra</td><td><strong>Timone</strong> · a destra accosta a dritta, come la ruota</td></tr>
+      <tr><td>Manopole a destra</td><td><strong>Randa</strong> e <strong>fiocco</strong> · gira in senso orario per cazzare, come sul verricello</td></tr>
     </table>
     <h2>Col dito, o senza rotella orizzontale</h2>
-    <p>Sul telefono i due <strong>joystick</strong> in fondo allo schermo compaiono da soli;
-       sul computer si accendono da <em>Joystick</em> nel menù in alto. Servono anche lì: senza
-       una rotella orizzontale il fiocco si regola solo con <kbd>Q</kbd> <kbd>E</kbd>, e il pad
-       destro dà le due scotte insieme con una mano sola.</p>
-    <p>Sono comandi di <strong>velocità</strong>, non di posizione, esattamente come i tasti:
-       quanto sposti il dito decide quanto in fretta si muove la scotta o la barra, e mollando
-       il pad <em>la regolazione resta dov'è</em> — la barra non torna dritta da sola, come con
-       la frizione inserita. La risposta non è lineare: il primo terzo di corsa regola fine come
-       la rotella a 1/5, il fondo corsa va come una freccia tenuta premuta.</p>
+    <p>Sul telefono i comandi in fondo allo schermo compaiono da soli; sul computer si accendono
+       da <em>Comandi a dito</em> nel menù in alto. Servono anche lì: senza una rotella
+       orizzontale il fiocco si regola solo con <kbd>Q</kbd> <kbd>E</kbd>.</p>
+    <p>Il <strong>timone</strong> è un comando di <em>velocità</em>, come i tasti: quanto sposti
+       il dito decide quanto in fretta si muove la barra, e mollando il pad <em>la barra resta
+       dov'è</em> — non torna dritta da sola, come con la frizione inserita. La risposta non è
+       lineare: il primo terzo di corsa regola fine come la rotella a 1/5, il fondo corsa va
+       come una freccia tenuta premuta.</p>
+    <p>Le <strong>manopole</strong> delle scotte sono invece di <em>posizione</em>: dove sta la
+       manopola sta la vela. Ci vogliono <strong>due giri interi</strong> per andare da tutta
+       cazzata a tutta lascata — otto gradi di dita per un grado di vela — così la fascia verde
+       dell'ottimo si trova senza scavalcarla. L'anello esterno è la corsa della scotta srotolata:
+       fascia verde dove dovrebbe stare adesso, segno chiaro dove sta. Girano anche da sole,
+       quando comanda la regolazione automatica (<kbd>T</kbd>) o quando cambia la vela.</p>
     <p>La fila di pulsanti sopra i pad è la tastiera che sul telefono non c'è:
        <em>Carta</em> (<kbd>C</kbd>), <em>Pilota</em> (<kbd>Z</kbd>), <em>Auto</em> (<kbd>T</kbd>),
        <em>Barra</em> dritta (<kbd>Spazio</kbd>), <em>Collo</em> (<kbd>B</kbd>),

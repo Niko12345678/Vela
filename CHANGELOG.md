@@ -9,6 +9,54 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
 
 ## Non rilasciato
 
+### Cambiato
+- **Le scotte si regolano con due manopole, non più col pad a due assi.**
+  Il pad destro chiedeva di tenere a mente due assi contemporaneamente —
+  verticale la randa, orizzontale il fiocco — e dava *velocità*: per
+  arrivare a un certo punto della corsa bisognava spingere, guardare la
+  barra degli strumenti e mollare al momento giusto, che con la fascia
+  verde dell'ottimo larga pochi gradi voleva dire scavalcarla a ogni
+  tentativo. Non era il gesto di una barca: a bordo non si spinge una
+  cloche, si gira un verricello. Ora ci sono **due manopole**, una per
+  scotta, e sono comandi di **posizione**: dove sta la manopola sta la
+  vela. Ci vogliono **due giri interi** per l'intera corsa — 720° di dita
+  per 90° di randa, otto gradi di manopola per uno di vela — e sono i due
+  giri a dare il dosaggio fine che prima si cercava a colpi di velocità.
+  In senso **orario si cazza**, come si avvolge una cima sul tamburo. Il
+  dito gira davvero attorno al perno e i giri si contano: l'angolo fra un
+  evento e il successivo viene «srotolato» a ±180°, se no passando davanti
+  al fondo scala un grado diventerebbe un giro al contrario. Attorno al
+  perno c'è un raggio morto di 13 px, dove il pollice appoggiato produce
+  solo angoli a caso.
+  Attorno a ogni manopola l'anello esterno è **la corsa della scotta
+  srotolata su 270°**, con le stesse fasce della barra degli strumenti —
+  troppo cazzata, finestra buona, troppo lascata — e il segno chiaro dove
+  la vela sta adesso: la regolazione si trova guardando la manopola, senza
+  spostare gli occhi in basso a sinistra. Le manopole non hanno uno stato
+  proprio, leggono e scrivono `boat.trim` e `boat.jib`, quindi girano da
+  sole quando comanda la regolazione automatica (T), quando si prende una
+  mano di terzaroli o quando si issa lo spinnaker — che porta anche il
+  fine corsa del fiocco da 80° a 90°, e il rapporto della manopola cambia
+  con lui.
+  **Il timone resta il pad di prima**, com'è giusto: la barra è un comando
+  di velocità con la frizione inserita, e mollando il dito deve restare
+  dov'è. Essendo rimasto a un asse solo, `joyVettore` ora restituisce un
+  numero invece di un vettore e il ritorno al centro sul pad tondo è
+  sparito con l'asse che lo usava.
+  Di conseguenza il menù dice *Comandi a dito* invece di *Joystick*, e la
+  schermata dei comandi spiega la differenza fra il pad (velocità) e le
+  manopole (posizione). In `game.js` la sigla `joy` resta nei nomi interni
+  — è la fascia in fondo allo schermo, pad e pulsantiera compresi — e
+  `JOY_ALTA`/`JOY_BASSA` continuano a essere il contratto d'altezza con gli
+  strumenti, che non è cambiato.
+- `test/joystick.test.js`: al posto dei versi dei quattro assi e della
+  cloche, le manopole — un quarto di giro vale un ottavo della corsa, due
+  giri interi la coprono tutta, il fiocco ha una corsa più corta e con lo
+  spi si allunga, una manopola non tocca l'altra vela, il fine corsa non si
+  sfonda — e il conteggio dei giri: il salto a ±180° non conta come mezzo
+  giro, e un giro fatto in otto passi vale mezza corsa. Del pad resta il
+  collaudo di quello del timone.
+
 ### Aggiunto
 - **Due joystick per governare col dito — o col mouse, senza rotella
   orizzontale.** Sul telefono i comandi erano sei pulsanti tutto-o-niente:
