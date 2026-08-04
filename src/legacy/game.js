@@ -214,6 +214,22 @@ function resetBoat(){
   if(world.ports) startVoyage(nearestPort(boat.x,boat.y));
   say("Al via da "+(voy?voy.from:"—"));
 }
+/* Il seme è una parola qualunque: la stessa parola rifà la stessa carta.
+   Di default non ne fissiamo una — se ne pesca una a caso e la si scrive
+   nel campo, così la prima mappa casuale non è sempre quella e chi vuole
+   ritrovarla ha comunque sotto gli occhi la parola da riusare. */
+function semeCasuale(){ return Math.random().toString(36).slice(2,8); }
+function semeCorrente(){
+  const el=document.getElementById("seed");
+  if(!el) return semeCasuale();
+  if(!el.value.trim()) el.value=semeCasuale();
+  return el.value.trim();
+}
+function semeNuovo(){
+  const el=document.getElementById("seed"), s=semeCasuale();
+  if(el) el.value=s;
+  return s;
+}
 function newWorld(seedStr){
   world=mapMode==="ionio"?ionianWorld():genWorld(seedStr);
   MARK_R=clamp(world.size/130,45,150);
@@ -630,7 +646,21 @@ function cyclePilot(){
   }
   else say("Autotimoniere disinserito — barra libera");
 }
+/* Quando il fuoco è in un campo da scrivere, la tastiera è per scrivere e
+   basta: senza questo, digitare un seme faceva sparire il menù sulla M,
+   issare lo spi sulla G e rigenerare la carta sulla N. Caselle, rotelle e
+   cursori restano fuori: lì non si scrive, e il gioco continua a
+   rispondere ai tasti anche col fuoco sopra. */
+function scrivendo(el){
+  if(!el) return false;
+  if(el.isContentEditable) return true;
+  if(el.tagName==="TEXTAREA"||el.tagName==="SELECT") return true;
+  if(el.tagName!=="INPUT") return false;
+  const t=(el.type||"text").toLowerCase();
+  return !["checkbox","radio","range","button","submit","reset","color","file"].includes(t);
+}
 addEventListener("keydown",e=>{
+  if(scrivendo(e.target))return;
   const k=e.key.toLowerCase();
   if(["arrowleft","arrowright","arrowup","arrowdown"," "].includes(k))e.preventDefault();
   if(askEl.classList.contains("on")){
@@ -685,7 +715,7 @@ function comando(k,shift){
     if(boat.jibFurled)say("Il fiocco è avvolto — premi F per issarlo");
     else{boat.jibBack=!boat.jibBack;say(boat.jibBack?"Fiocco a collo — la prua cade sottovento":"Fiocco liberato");}
   }
-  if(k==="n"){document.getElementById("seed").value=Math.random().toString(36).slice(2,8);newWorld(document.getElementById("seed").value);}
+  if(k==="n")newWorld(semeNuovo());
   if(k==="t"){game.auto=!game.auto;say(game.auto?"Regolazione vele AUTOMATICA":"Regolazione vele manuale");}
   if(k==="+"||k==="=")game.zoom=clamp(game.zoom*1.25,1.1,9);
   if(k==="-"||k==="_")game.zoom=clamp(game.zoom/1.25,1.1,9);
@@ -2090,10 +2120,10 @@ addEventListener("keydown",e=>{if(e.key==="Escape"&&helpEl.classList.contains("o
 document.getElementById("reset").onclick=e=>{e.currentTarget.blur();
   askConfirm("Riportare la barca al via? La regata in corso e il cronometro ripartono da zero.",resetBoat);};
 document.getElementById("mapsel").onchange=e=>{mapMode=e.target.value;e.target.blur();
-  newWorld(document.getElementById("seed").value||"vela");say(world.name);};
+  newWorld(semeCorrente());say(world.name);};
 document.getElementById("gen").onclick=()=>{
   if(mapMode==="ionio"){mapMode="rnd";document.getElementById("mapsel").value="rnd";}
-  newWorld(document.getElementById("seed").value||"vela");say(world.name);};
+  newWorld(semeCorrente());say(world.name);};
 document.getElementById("tscale").onchange=e=>{timeScale=parseFloat(e.target.value);e.target.blur();
   say("Ritmo di gioco "+e.target.value.replace(".",",")+"×");};
 document.getElementById("vis").oninput=e=>{streakVis=parseFloat(e.target.value);};
@@ -3298,7 +3328,7 @@ document.getElementById("tutb").onclick=e=>{e.currentTarget.blur();tutStart();};
 
 /* ══════════════════ loop ══════════════════ */
 fillBarche();
-newWorld("mantova");
+newWorld(semeCorrente());
 loadLog();
 caricaCarriera();
 helpEl.classList.add("on");
