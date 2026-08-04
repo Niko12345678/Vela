@@ -4,6 +4,8 @@
     "gozzo": {
       "nome": "Gozzo a vela latina",
       "sommario": "6,5 m · agile e leggero, ma scarroccia",
+      "prezzo": 5000,
+      "stiva": 1.2,
       "note": "Apre e chiude come un interruttore: accelera in tre secondi e in tre si ferma, vira su una moneta. Ma la deriva quasi non c'è, quindi di bolina scivola di lato invece di guadagnare terreno, e con una sola mano di terzaroli sopra i 15 nodi diventa una faccenda seria. Niente spinnaker.",
       "k": {
         "SAIL_MAIN": 6,
@@ -33,6 +35,8 @@
     "crociera11": {
       "nome": "Sloop 11 m",
       "sommario": "11 m · equilibrato e tollerante",
+      "prezzo": 18000,
+      "stiva": 3.5,
       "note": "La barca di riferimento del simulatore: quella che la golden test collauda da sempre. Tiene la rotta, perdona gli errori di regolazione, ha tre mani di terzaroli e lo spinnaker. Se cambi qui dentro un numero, cambi il contratto della simulazione.",
       "k": {
         "SAIL_MAIN": 12,
@@ -62,6 +66,8 @@
     "regata12": {
       "nome": "Dodici da regata",
       "sommario": "12 m · velocissima e sfinente",
+      "prezzo": 34000,
+      "stiva": 1.5,
       "note": "Leggera come il gozzo e con l'albero del quindici metri: deriva profonda, vele laminate che puntano altissimo, spinnaker enorme. In cambio è tenera — sbanda presto — e il bilanciamento va tenuto d'occhio in continuazione. Non porta niente e non perdona niente.",
       "k": {
         "SAIL_MAIN": 18,
@@ -91,6 +97,8 @@
     "cutter15": {
       "nome": "Cutter 15 m",
       "sommario": "15 m · pesante, da mare aperto",
+      "prezzo": 52000,
+      "stiva": 9,
       "note": "Non si ferma e non si gira: tutto succede trenta secondi dopo che l'hai deciso, quindi si governa anticipando. Con poco vento sottocosta è noia pura, su una tratta lunga con vento forte non la ferma niente. Tre mani di terzaroli e un pescaggio che tiene fuori dalle cale basse.",
       "k": {
         "SAIL_MAIN": 22,

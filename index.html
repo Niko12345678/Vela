@@ -66,27 +66,38 @@
   #tutbtns button{font-size:10px;padding:4px 10px}
   #help{position:absolute;inset:0;display:none;place-items:center;z-index:10;
     background:rgba(6,24,35,.86)}
-  #logbook{position:absolute;inset:0;display:none;place-items:center;z-index:10;
+  /* il giornale e la carriera sono lo stesso foglio: stesse regole, due pannelli */
+  #logbook,#carriera{position:absolute;inset:0;display:none;place-items:center;z-index:10;
     background:rgba(6,24,35,.88)}
-  #logbook.on{display:grid}
-  #logbox{width:min(780px,calc(100% - 32px));max-height:88vh;overflow-y:auto;
+  #logbook.on,#carriera.on{display:grid}
+  #logbox,#carbox{width:min(780px,calc(100% - 32px));max-height:88vh;overflow-y:auto;
     padding:24px 28px 0;border:1px solid rgba(243,234,212,.25);background:rgba(8,32,46,.97);
     border-radius:3px;font-size:12px;scrollbar-width:thin}
-  #logbox h1{font-size:15px;letter-spacing:.24em;text-transform:uppercase;margin:0 0 6px;font-weight:600}
-  #logbox h2{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);
+  #logbox h1,#carbox h1{font-size:15px;letter-spacing:.24em;text-transform:uppercase;margin:0 0 6px;font-weight:600}
+  #logbox h2,#carbox h2{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);
     margin:18px 0 6px;font-weight:600}
-  #logsum{color:var(--chart-dim);font-size:11px;letter-spacing:.05em}
-  #logcols{display:flex;gap:26px;flex-wrap:wrap}
+  #logsum,#carsum{color:var(--chart-dim);font-size:11px;letter-spacing:.05em}
+  #logcols,#carcols{display:flex;gap:26px;flex-wrap:wrap}
   #logcols>div:first-child{flex:1 1 380px;min-width:320px}
-  #logbox table{border-collapse:collapse;width:100%;font-size:11px}
-  #logbox td{padding:3px 6px 3px 0;border-bottom:1px solid rgba(243,234,212,.08);white-space:nowrap}
-  #logbox td.n{text-align:right;color:var(--chart-dim)}
-  #logbox td.r{color:var(--warn);text-align:right}
-  #logbox td button{font-size:9px;padding:2px 7px}
-  #logbox .empty{color:var(--chart-dim);line-height:1.6;font-size:11px}
+  #carcols>div{flex:1 1 320px;min-width:290px}
+  #logbox table,#carbox table{border-collapse:collapse;width:100%;font-size:11px}
+  #logbox td,#carbox td{padding:3px 6px 3px 0;border-bottom:1px solid rgba(243,234,212,.08);white-space:nowrap}
+  #logbox td.n,#carbox td.n{text-align:right;color:var(--chart-dim)}
+  #logbox td.r,#carbox td.r{color:var(--warn);text-align:right}
+  #logbox td button,#carbox td button{font-size:9px;padding:2px 7px}
+  #carbox button[disabled]{opacity:.32;cursor:not-allowed}
+  #logbox .empty,#carbox .empty{color:var(--chart-dim);line-height:1.6;font-size:11px}
+  #carbox td:first-child{white-space:normal}
   #polarcv{display:block}
-  #logfoot{position:sticky;bottom:0;margin-top:22px;padding:14px 0 20px;display:flex;
+  #logfoot,#carfoot{position:sticky;bottom:0;margin-top:22px;padding:14px 0 20px;display:flex;
     gap:8px;justify-content:flex-end;background:linear-gradient(to bottom,rgba(8,32,46,0),rgba(8,32,46,.97) 35%)}
+  #carcode{width:100%;box-sizing:border-box;resize:vertical;font:10px/1.4 ui-monospace,monospace;
+    color:var(--chart);background:rgba(6,24,35,.75);border:1px solid rgba(243,234,212,.22);
+    border-radius:3px;padding:6px 8px;word-break:break-all}
+  #carbtns{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  #carbtns button{font-size:9px;padding:3px 8px}
+  #carmsg{margin-top:8px;font-size:11px;min-height:14px;line-height:1.5;white-space:normal}
+  #carnota{color:var(--chart-dim);font-size:10px;line-height:1.6;margin-top:8px}
   #ask{position:absolute;inset:0;display:none;place-items:center;z-index:11;
     background:rgba(6,24,35,.72)}
   #ask.on{display:grid}
@@ -203,6 +214,7 @@
   <button id="gen">Nuova mappa</button>
   <button id="reset">Riporta al via</button>
   <button id="chartb">Carta (C)</button>
+  <button id="carb">Carriera (I)</button>
   <button id="logb">Giornale</button>
   <button id="helpb">Comandi</button>
   <button id="hidem">Nascondi (M)</button>
@@ -271,6 +283,49 @@
   </div>
 </div>
 
+<div id="carriera">
+  <div id="carbox">
+    <h1>Carriera</h1>
+    <div id="carsum"></div>
+    <div id="carcols">
+      <div>
+        <h2>Carico a bordo</h2>
+        <div id="carinc"></div>
+        <h2>Offerte dal porto</h2>
+        <div id="caroff"></div>
+        <h2>Consegne fatte</h2>
+        <div id="carstoria"></div>
+      </div>
+      <div>
+        <h2>Cantiere</h2>
+        <div id="carflotta"></div>
+        <h2>Salvataggio portatile</h2>
+        <textarea id="carcode" rows="4" spellcheck="false" autocomplete="off"
+          placeholder="Genera un codice da portare altrove, oppure incolla qui quello di un altro dispositivo e premi Carica."></textarea>
+        <div id="carbtns">
+          <button id="carexp">Genera codice</button>
+          <button id="carcopy">Copia</button>
+          <button id="carfile">Scarica file</button>
+          <button id="carimp">Carica dal codice</button>
+          <button id="carload">Apri file…</button>
+          <input id="carfilein" type="file" accept=".vela,.txt,text/plain" hidden>
+        </div>
+        <div id="carmsg"></div>
+        <div id="carnota">Il gioco non ha né server né account: quello che salvi resta nel browser
+          di questo dispositivo. Per ritrovare la carriera sul telefono, sull'altro computer o
+          dopo aver svuotato la cronologia, genera il codice e portatelo — incollato in una nota,
+          in un messaggio, o come file scaricato. Il codice contiene giornale e carriera; il file
+          anche le tracce dei record, che sono il grosso del peso.</div>
+      </div>
+    </div>
+    <div id="carfoot">
+      <button id="carstart">Comincia la carriera</button>
+      <button id="carclear">Abbandona</button>
+      <button id="carclose">Chiudi (I)</button>
+    </div>
+  </div>
+</div>
+
 <div id="ask">
   <div id="askbox">
     <div id="asktxt"></div>
@@ -312,6 +367,7 @@
       <tr><td>Click sulla carta</td><td><strong>Segna un punto di rotta</strong> · un click sopra un punto lo toglie</td></tr>
       <tr><td><kbd>Canc</kbd> (sulla carta)</td><td>Toglie l'ultimo punto · <kbd>Maiusc</kbd>+<kbd>Canc</kbd> cancella tutta la rotta</td></tr>
       <tr><td><kbd>L</kbd></td><td>Giornale di bordo</td></tr>
+      <tr><td><kbd>I</kbd></td><td>Carriera: incarichi, cantiere e salvataggio da portare altrove</td></tr>
       <tr><td><kbd>M</kbd></td><td>Nascondi / mostra il menù in alto</td></tr>
       <tr><td><kbd>R</kbd> · <kbd>N</kbd> · <kbd>P</kbd> · <kbd>H</kbd></td><td>Riparti · nuova mappa · pausa · questa schermata</td></tr>
       <tr><td>Pad a sinistra</td><td><strong>Timone</strong> · dove metti il pomo sta la barra, a destra accosta a dritta · <strong>doppio tocco</strong> la rimette dritta</td></tr>
@@ -407,6 +463,13 @@
     <p><kbd>L</kbd> apre il giornale. Ogni volta che parti da un porto e ne raggiungi un altro la traversata viene registrata da sola: tempo, miglia, velocità media. Il tempo migliore su ogni tratta diventa un <strong>record</strong>, e da lì in poi rifacendo quella rotta trovi in acqua il <strong>fantasma</strong> della tua traversata migliore, con la sua scia tratteggiata e il differenziale in secondi in plancia. Dal giornale puoi anche premere <em>Sfida</em> su una tratta per essere portato al porto di partenza con quel fantasma già armato.</p>
     <p>Il <strong>polare</strong> confronta il tuo massimo per ogni settore di vento con la curva teorica della barca, calcolata risolvendo l'equilibrio fra spinta velica e resistenza dello scafo. Se un settore resta molto sotto la curva, lì hai qualcosa da imparare.</p>
     <p>Tutto viene salvato: nell'archivio degli artefatti se disponibile, altrimenti in quello del browser, altrimenti solo per la sessione. Il giornale ti dice quale sta usando.</p>
+    <h2>Carriera</h2>
+    <p><kbd>I</kbd> apre la carriera. Si comincia con <strong>1.500 €</strong> e un gozzo, e si vive di trasporti: ogni porto offre <strong>tre carichi</strong> per tre destinazioni diverse — una vicina, una di mezzo, una lontana — con merce, tonnellaggio, scadenza e paga. Si viene pagati <strong>a miglio e a tonnellata</strong>, e la consegna urgente paga la metà in più di quella comoda.</p>
+    <p>La prima delle tre offerte sta sempre nella stiva del gozzo; le altre no. È lì il senso della <strong>flotta</strong>: lo sloop porta 3,5 tonnellate, il cutter nove, e sono quelle che pagano davvero. Le barche si comprano dal <em>cantiere</em>, nel pannello stesso, e in carriera si naviga solo su quelle che si possiedono.</p>
+    <p>Arrivare in ritardo scala la paga in proporzione, ma mai sotto un terzo: il carico è arrivato lo stesso. <strong>Toccare il fondo</strong> invece bagna la merce, e ogni incaglio se ne porta via il 18%. Si può sempre <em>rinunciare</em> a un carico, riconsegnandolo a terra e pagando un quinto della paga di penale. La regata, il tutorial e il giornale continuano a funzionare come prima: la carriera non cambia una virgola del mare.</p>
+    <h2>Portare i salvataggi da un dispositivo all'altro</h2>
+    <p>Il gioco non ha server né account: giornale e carriera restano nel browser dove giochi, e il browser del telefono non parla con quello del computer. Per questo il pannello della carriera genera un <strong>codice di salvataggio</strong>: una riga di testo che contiene tutto, da copiare e incollare dove vuoi — in una nota, in un messaggio, in una mail. Sull'altro dispositivo lo incolli nella stessa casella e premi <em>Carica dal codice</em>.</p>
+    <p>Chi preferisce un file può premere <em>Scarica file</em> e ottenere un <code>.vela</code>, che <em>Apri file…</em> rilegge. Il file contiene anche le <strong>tracce dei fantasmi</strong>, che sono il grosso del peso e che il codice da incollare lascia indietro: caricando un codice i record restano, la scia in acqua no. Il salvataggio caricato <strong>sostituisce</strong> quello che c'è: viene chiesta conferma, e conviene generarsi il codice di quello vecchio prima di sovrascriverlo.</p>
     <h2>Regata</h2>
     <p>Gira le 6 boe <strong>in ordine</strong>, lasciandole a meno di 45 m. La freccia sul bordo dello schermo indica la prossima. Il cronometro parte quando ti muovi.</p>
     <div id="helpfoot"><button id="closehelp">Molla gli ormeggi</button></div>

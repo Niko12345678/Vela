@@ -5,6 +5,10 @@
    `new Function` e lì una dichiarazione import è un errore di sintassi.
    Va quindi importato PRIMA di game.js.
 
+   Fuori da `k`, ogni barca porta anche `prezzo` (euro, quanto costa in
+   carriera) e `stiva` (tonnellate di carico che regge): non sono fisica,
+   la fisica non li guarda, ma decidono quali incarichi puoi accettare.
+
    ─ Glossario delle costanti di src/data/barche.json ─
    Sono i vecchi commenti di `const K`, che il JSON non può portarsi dietro.
 

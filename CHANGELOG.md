@@ -9,6 +9,64 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
 
 ## Non rilasciato
 
+### Aggiunto
+- **Modalità carriera: i porti pagano per portare roba da un'altra parte.**
+  Il giornale di bordo registrava già ogni traversata fra due porti veri,
+  ma non c'era nessun motivo per fare *quella* traversata invece di
+  un'altra: si navigava per navigare, e la scelta della barca era una prova
+  a vuoto, perché nessuno scafo serviva a niente più degli altri. La
+  carriera (`I`) mette un motivo sotto ogni rotta. Si comincia con
+  **1.500 € e un gozzo**; ogni porto offre **tre carichi** per tre
+  destinazioni diverse — una vicina, una di mezzo, una lontana — con merce,
+  tonnellaggio, scadenza e paga; si viene pagati **a miglio e a
+  tonnellata**, e l'urgente vale una volta e mezza il comodo.
+  La regola che tiene in piedi tutto è la **stiva**: la prima delle tre
+  offerte ci sta sempre in quella del gozzo, le altre no. Così il cantiere
+  non è un negozio di skin — lo sloop porta 3,5 t, il cutter nove, e sono
+  quelle le consegne che pagano — e in carriera si naviga soltanto su
+  quello che ci si è comprati. Prezzo e stiva stanno in `barche.json`
+  accanto a ogni scafo, non nel gioco: sono roba della barca. La fisica non
+  li guarda, e la golden test non si accorge che esistono.
+  Il **ritardo** scala la paga in proporzione ma non sotto un terzo — il
+  carico è arrivato lo stesso, è una multa e non una beffa — mentre
+  **toccare il fondo** bagna la merce, 18% per incaglio, contato una volta
+  per incaglio e non per secondo passato sugli scogli. Le offerte di un
+  porto sono una *funzione* del porto e del seme, non un tiro di dadi:
+  chiudendo e riaprendo il pannello si ritrovano le stesse tre, e il
+  collaudo può verificarle senza rincorrere `Math.random`.
+  Due porte chiuse apposta: col carico a bordo non si cambia barca e non si
+  sceglie il porto di partenza dal menù, se no la consegna sarebbe un
+  teletrasporto. Cambiando carta, invece, l'incarico decade **senza**
+  penale: quel porto non esiste più, e non è colpa del marinaio.
+- **Salvataggio portatile, per portare la carriera su un altro
+  dispositivo.** L'archivio del browser non attraversa i dispositivi:
+  quello del telefono e quello del computer sono due mondi separati, e
+  senza server non c'è modo di farli parlare da soli — svuotare la
+  cronologia bastava a cancellare tutto. Ora il pannello della carriera
+  genera un **codice di testo** che contiene giornale e carriera, da
+  copiare e incollare dove si vuole, e lo rilegge dalla stessa casella;
+  in alternativa scarica e riapre un file `.vela`. Nessun account, nessuna
+  rete, funziona ovunque giri il gioco.
+  Il codice è `VELA1.<base64url>.<firma>`: la firma è lo stesso `hashStr`
+  dei semi e serve solo a dire "questo testo è arrivato storto", non a
+  impedire di modificarlo — chi vuole barare coi propri record è
+  liberissimo. Il codice da incollare **lascia indietro le tracce dei
+  fantasmi**, che da sole sono il grosso del peso: coi tracciati sarebbe
+  lungo decine di migliaia di caratteri e non lo incollerebbe nessuno.
+  Caricandolo i record restano, la scia in acqua no; il file, che nessuno
+  legge a occhio, se la porta dietro tutta. Quello che arriva da fuori
+  passa sempre da `carrieraSana()`, che butta barche inesistenti, numeri
+  che non sono numeri e casse negative: un salvataggio è testo che chiunque
+  può aver scritto.
+- `test/carriera.test.js`: le offerte deterministiche, la paga che cresce
+  con distanza e carico, il carico più grosso della stiva, la consegna in
+  orario e quella in ritardo (col pavimento a un terzo), l'incaglio contato
+  una volta sola, il cantiere che non vende a chi non ha soldi, la barca
+  non tua che non si imbarca, il codice di salvataggio che va e torna
+  identico — accenti compresi — e che si riconosce storpiato, lo stato
+  sporco che viene ripulito, la carriera che si ritrova nell'archivio, e
+  l'arrivo in porto che chiude la consegna da sé.
+
 ### Cambiato
 - **Anche il timone è a posizione, e un doppio tocco lo rimette dritto.**
   Restava l'ultimo comando a velocità: si spingeva il pomo e la barra
