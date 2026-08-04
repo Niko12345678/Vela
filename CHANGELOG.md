@@ -9,6 +9,28 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
 
 ## Non rilasciato
 
+### Corretto
+- **Nei campi del menù la tastiera scrive, non comanda.** Scrivere un seme
+  era impossibile: ogni lettera era anche una scorciatoia, e "mantova"
+  faceva sparire il menù sulla M, rigenerava la carta sulla N, apriva la
+  carriera sulla I. Ora l'ascoltatore della tastiera si tira indietro
+  quando il fuoco è su un campo da scrivere (testo, area di testo, elenco a
+  tendina, contenuto modificabile), frecce comprese, che lì servono a
+  muovere il cursore. Caselle, rotelle e cursori restano fuori dalla
+  guardia: sopra di loro non si scrive, e i tasti del gioco devono
+  continuare a rispondere.
+
+### Cambiato
+- **Il seme di partenza non è più "mantova".** Un valore fisso nel campo
+  voleva dire che la prima carta casuale era sempre la stessa per tutti, e
+  che chi non lo cambiava non capiva a cosa servisse quella parola. Adesso
+  il campo parte vuoto (`placeholder` "a caso") e il gioco ci scrive dentro
+  un seme pescato a caso al primo mondo che serve, così resta sotto gli
+  occhi la parola da riusare per ritrovare quell'arcipelago. Le strade che
+  portano a una carta nuova — avvio, tasto `N`, pulsante "Nuova mappa",
+  cambio carta — passano ora da `semeCorrente()` / `semeNuovo()` invece di
+  ripescare a mano il campo con un `||"vela"` di ripiego.
+
 ### Aggiunto
 - **Modalità carriera: i porti pagano per portare roba da un'altra parte.**
   Il giornale di bordo registrava già ogni traversata fra due porti veri,
