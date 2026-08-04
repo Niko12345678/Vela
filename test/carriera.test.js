@@ -76,6 +76,51 @@ test("la paga cresce con la distanza e col carico, la fretta paga di più", asyn
   });
 });
 
+/* La scadenza è un tempo, ma quello che conta è la velocità che chiede:
+   `limite` diviso la distanza dà i nodi FATTI BUONI da tenere in linea
+   d'aria fino all'arrivo. Vanno confrontati con la barca da cui si comincia
+   — il gozzo, che al traverso fa 4,8 nodi ma di bolina ne guadagna 2,1
+   verso il vento, e in mezzo ci sono i bordi, le terre da girare e l'ombra
+   di vento. Chiedere di più vuol dire scadenze che nessuno rispetta: è
+   quello che facevano le prime consegne. */
+test("le scadenze chiedono una velocità che il gozzo può tenere davvero", async () => {
+  const r = await runInGame(`
+    ${APRI}
+    setBarca("gozzo");
+    // la VMG di bolina migliore del gozzo, sul modello vero
+    let vmg = 0;
+    for (let a = 25; a <= 90; a++)
+      vmg = Math.max(vmg, polarSpeed(a, windBase) * 1.94384 * Math.cos(a * Math.PI / 180));
+    // le offerte di più porti e più semi, per non giudicare da una tratta sola
+    const richieste = {};
+    for (const porto of ["Preveza", "Sami", "Kioni"])
+      for (let seme = 1; seme <= 6; seme++)
+        for (const o of offerteDi(porto, seme))
+          // ore VERE per la traversata: il cronometro è ridotto 1:6 come la carta
+          (richieste[o.fretta] = richieste[o.fretta] || []).push(o.nmi / (o.limite * SCALE_GEO / 3600));
+    const per = {};
+    for (const k in richieste) per[k] = { min: Math.min(...richieste[k]), max: Math.max(...richieste[k]) };
+    report({ per, vmg, punta: polarSpeed(100, windBase) * 1.94384 });
+  `);
+
+  const { comoda, normale, urgente } = r.per;
+  // dentro una stessa fretta la velocità chiesta non dipende dalla tratta:
+  // il noleggiatore stima a nodi fissi, la distanza la moltiplica e basta
+  // (a meno degli arrotondamenti: `nmi` è a un decimo di miglio)
+  for (const f of [comoda, normale, urgente])
+    assert.ok(f.max - f.min < f.min * 0.03, "la stessa fretta chiede sempre gli stessi nodi");
+
+  assert.ok(comoda.max < r.vmg * 0.75,
+    `una consegna comoda si fa anche bolinando tutto il tempo: chiede ${comoda.max.toFixed(2)} kn, di bolina se ne fanno buoni ${r.vmg.toFixed(2)}`);
+  assert.ok(normale.max < r.vmg,
+    `una normale sta sotto la VMG di bolina: ${normale.max.toFixed(2)} kn`);
+  assert.ok(urgente.max < r.punta * 0.55,
+    `nemmeno un'urgente chiede la velocità di punta: ${urgente.max.toFixed(2)} kn su ${r.punta.toFixed(2)} kn`);
+  // e restano tre livelli distinti: se no la fretta non vuol dire niente
+  assert.ok(comoda.max < normale.max && normale.max < urgente.max,
+    "comoda, normale e urgente chiedono velocità crescenti");
+});
+
 test("un carico più grosso della stiva non si carica", async () => {
   const r = await runInGame(`
     ${APRI}

@@ -3,7 +3,12 @@
  * Uno scatto di rotella a passo pieno muove la scotta di ~6°: giusto per
  * lascare tutto in poppa, troppo per cercare la fascia verde dell'ottimo,
  * che è larga pochi gradi. Da qui il *passo* scelto nel menù, che scala
- * tutto quello che si regola con la rotella tranne lo zoom.
+ * tutto quello che si regola con la rotella tranne lo zoom — e da qui il
+ * predefinito a 1/5, verificato in fondo insieme al menù che lo mostra.
+ *
+ * I collaudi sui versi e sugli accoppiamenti misurano lo scatto PIENO:
+ * `pronti()` rimette `wheelStep` a 1 apposta, così parlano di gradi veri e
+ * non cambiano di significato se un giorno cambia il predefinito.
  *
  * Qui si collauda `rotella(e)`, la funzione che l'ascoltatore chiama con
  * l'evento vero: la harness non può recapitare eventi (`addEventListener`
@@ -13,6 +18,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { runInGame } from "./harness.js";
 
 const MONDO = `world = { islands: [], marks: [{x:1e9,y:1e9}], ports: [], shade: [],
@@ -25,7 +31,8 @@ const scatto = (o={}) => rotella({ deltaY: 0, deltaX: 0, deltaMode: 0,
 const pronti = () => { chart.on=false; game.paused=false; game.auto=false; game.pilot=0;
                        boat.spi=false; boat.jibFurled=false;
                        boat.trim=45*D2R; boat.jib=35*D2R;
-                       boat.rudderCmd=0; boat.rudderTrim=0; };
+                       boat.rudderCmd=0; boat.rudderTrim=0;
+                       wheelStep=1; };
 `;
 
 test("il passo delle rotelle scala lo scatto, da 1× a un decimo", async () => {
@@ -214,4 +221,23 @@ test("rotelle invertite: si invertono anche barra e cavallino", async () => {
 
   assert.ok(r.si.randa < r.no.randa, "la randa si inverte");
   assert.ok(Math.abs(r.si.barra + r.no.barra) < 1e-12, "e la barra con lei");
+});
+
+/* Il predefinito è 1/5, e non basta che lo sia in `game.js`: il menù mostra
+   un'opzione già selezionata, e se le due cose non coincidono il marinaio
+   legge 1/5 e gira una rotella che va a passo pieno. Il valore vive in due
+   file, quindi si collauda che siano d'accordo. */
+test("il passo predefinito è 1/5, e il menù dice la stessa cosa", async () => {
+  const r = await runInGame(`
+    ${MONDO}
+    report({ passo: wheelStep });
+  `);
+  assert.equal(r.passo, 0.2, "a gioco appena aperto la rotella va a un quinto di scatto");
+
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const wstep = html.match(/<select id="wstep">(.*?)<\/select>/s);
+  assert.ok(wstep, "il menù del passo rotelle esiste ancora");
+  const scelta = wstep[1].match(/<option value="([\d.]+)" selected>/);
+  assert.ok(scelta, "un'opzione del passo rotelle è quella predefinita");
+  assert.equal(parseFloat(scelta[1]), 0.2, "ed è la stessa che usa il gioco");
 });
