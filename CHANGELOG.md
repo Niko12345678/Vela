@@ -68,6 +68,39 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
   l'arrivo in porto che chiude la consegna da sé.
 
 ### Cambiato
+- **Le scadenze della carriera stimavano una barca che non esiste.** Il
+  noleggiatore calcolava il tempo concesso su **4,2 nodi in linea d'aria**
+  fino al porto d'arrivo, e l'urgente concedeva appena il 2% in più. Ma 4,2
+  nodi non sono la velocità che si tiene *verso la destinazione*: il gozzo
+  con cui si comincia tocca i 4,8 nodi al traverso, però di bolina ne
+  guadagna **2,1** verso il vento, e in mezzo ci sono i bordi, le terre da
+  girare e l'ombra di vento sottovento alle isole. Chiedere 4,2 voleva dire
+  chiedere il doppio di quello che la barca può fare su una tratta contro
+  vento: le consegne scadevano quasi tutte, e la paga a scalare le rendeva
+  una tassa invece di una scelta. Ora la stima parte da **2,8 nodi fatti
+  buoni** — la media onesta di una traversata mista — e i coefficienti di
+  fretta aprono da lì: `comoda` 2,00, `normale` 1,50, `urgente` 1,25, cioè
+  1,4 / 1,9 / 2,2 nodi da tenere in linea d'aria. La comoda si porta a casa
+  anche bolinando tutto il tempo, l'urgente chiede una tratta portante o
+  una barca vera — e continua a pagare una volta e mezza. Le paghe non
+  cambiano: cambia solo il tempo concesso, che era il numero sbagliato.
+- **Il ritmo di gioco arriva a 12×.** Le traversate lunghe del Ionio, che
+  in carriera sono quelle che pagano, a 6× restavano mezz'ora di orologio
+  vero con poco da fare in mezzo. Aggiunti **8× e 12×**: la fisica gira già
+  a sottopassi da 20 ms ricavati dal tempo simulato, quindi accelerare non
+  la destabilizza — a 12× la barca tiene la rotta con lo stesso scarto che
+  a 1×, verificato a timone automatico in mare aperto.
+- **Il passo delle rotelle parte da 1/5.** Era 1×, cioè ~6° di scotta per
+  scatto: la fascia verde dell'ottimo è larga pochi gradi e con lo scatto
+  pieno la si scavalca a ogni tentativo, e il tutorial stesso doveva dire
+  "se ti sembra troppo grosso, abbassalo nel menù" — un predefinito che va
+  spiegato è un predefinito sbagliato. Ora il menù apre già su **1/5**, che
+  è il passo con cui la fascia si centra davvero; chi vuole lo scatto pieno
+  ce l'ha sempre lì. I collaudi dei versi e degli accoppiamenti rimettono
+  `wheelStep` a 1 apposta, così continuano a parlare di gradi veri, e un
+  collaudo nuovo verifica che `game.js` e il menù di `index.html` dicano lo
+  stesso numero: sono due file, e se divergono il marinaio legge 1/5 e gira
+  una rotella che va a scatto pieno.
 - **Anche il timone è a posizione, e un doppio tocco lo rimette dritto.**
   Restava l'ultimo comando a velocità: si spingeva il pomo e la barra
   cominciava a scorrere, così per metterla a metà bisognava spingere,

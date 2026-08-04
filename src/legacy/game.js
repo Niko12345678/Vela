@@ -735,16 +735,17 @@ function input(dt){
    sola — si muove invece la barra del timone.
    Funziona anche con lo scorrimento a due dita del trackpad.
 
-   `wheelStep` è il passo di uno scatto, scelto nel menù: 1 è quello di
-   sempre (~6° di scotta per scatto), 0.1 è un decimo. Serve perché la
-   fascia verde dell'ottimo è larga pochi gradi e con lo scatto pieno la si
-   scavalca a ogni tentativo. Moltiplica tutto quello che si regola con la
-   rotella — scotte, barra, cavallino, rotta impostata — ma NON lo zoom.
+   `wheelStep` è il passo di uno scatto, scelto nel menù: 1 è lo scatto
+   pieno (~6° di scotta), 0.1 è un decimo. Serve perché la fascia verde
+   dell'ottimo è larga pochi gradi e con lo scatto pieno la si scavalca a
+   ogni tentativo: per questo il predefinito è 1/5, che è il passo con cui
+   si riesce davvero a centrarla. Moltiplica tutto quello che si regola con
+   la rotella — scotte, barra, cavallino, rotta impostata — ma NON lo zoom.
 
    Le costanti per scatto pieno (a 100 px di scatto, il valore usuale):
    scotte 6°, barra 0,25 di corsa, cavallino 0,05 (un quinto della barra,
    come `,` `.` stanno alle frecce), rotta impostata 5°.               */
-let wheelInv=false, wheelStep=1;
+let wheelInv=false, wheelStep=0.2;   // il predefinito è 1/5: deve stare in accordo con #wstep
 const W_SCOTTA=0.06*D2R, W_BARRA=0.0025, W_CAVALLINO=0.0005, W_ROTTA=0.05*D2R;
 
 function rotella(e){
@@ -2717,12 +2718,22 @@ function drawPolarChart(){
 const CARRIERA_BARCA="gozzo";       // si comincia dal gozzo: costa poco e insegna il vento
 const CARRIERA_SOLDI=1500;          // cassa iniziale: non basta per niente, ed è il punto
 const NOLO_FISSO=110, NOLO_TON=55;  // paga in euro per miglio: parte fissa + parte a tonnellata
-const VRIF=4.2;                     // nodi di riferimento con cui il noleggiatore stima le scadenze
+/* I nodi con cui il noleggiatore stima le scadenze non sono la velocità
+   della barca: sono la velocità FATTA BUONA verso il porto d'arrivo, in
+   linea d'aria. Il gozzo tocca i 4,8 kt al traverso, ma di bolina la sua
+   VMG migliore è 2,1 kt teorici — e in mare ci sono i bordi, le terre da
+   girare e l'ombra di vento sottovento alle isole. Stimare a 4,2 kt voleva
+   dire chiedere a chi comincia una media che neanche col vento in poppa
+   perfetto avrebbe tenuto: da qui le consegne impossibili. 2,8 kt è la
+   media buona di una traversata mista, e i coefficienti di fretta aprono
+   da lì: `comoda` la fa anche chi bolina tutto il tempo, `urgente` chiede
+   2,2 kt fatti buoni, cioè una tratta portante o una barca vera. */
+const VRIF=2.8;                     // nodi FATTI BUONI di riferimento per le scadenze
 const RINUNCIA=0.2;                 // penale per un carico riconsegnato: un quinto della paga
 const MERCI=["olio","vino nuovo","sale","legname","reti da pesca","ricambi per il faro",
              "posta e giornali","damigiane vuote","sacchi di farina","cassette di pesce",
              "mattoni","ghiaccio","calce","corde e paranchi","agnelli vivi","miele"];
-const FRETTA=[{n:"comoda",kt:1.75,kp:0.85},{n:"normale",kt:1.30,kp:1},{n:"urgente",kt:1.02,kp:1.5}];
+const FRETTA=[{n:"comoda",kt:2.00,kp:0.85},{n:"normale",kt:1.50,kp:1},{n:"urgente",kt:1.25,kp:1.5}];
 
 function carrieraVuota(){
   return {attiva:false,soldi:CARRIERA_SOLDI,barche:[CARRIERA_BARCA],incarico:null,
@@ -3167,7 +3178,7 @@ const TUT=[
  ok:()=>Math.abs(norm(boat.h-tut.mem.h0))>60*D2R},
 
 {ttl:"Regolare le vele",hi:"sails",hold:2.5,
- txt:"Le due barre in basso a sinistra sono la <b>posizione delle scotte</b>: tutta cazzata a sinistra, tutta lascata a destra. La <b>fascia verde</b> è dove la scotta dovrebbe stare adesso. Porta il segno bianco dentro il verde con <b>↑↓</b> per la randa e <b>Q E</b> per il fiocco. Guarda anche le vele: diventano bianche col bordo verde quando sono giuste. Anche la <b>rotella</b> le regola; se lo scatto ti sembra troppo grosso, nel menù in alto abbassa il <i>passo rotelle</i> a 1/5.",
+ txt:"Le due barre in basso a sinistra sono la <b>posizione delle scotte</b>: tutta cazzata a sinistra, tutta lascata a destra. La <b>fascia verde</b> è dove la scotta dovrebbe stare adesso. Porta il segno bianco dentro il verde con <b>↑↓</b> per la randa e <b>Q E</b> per il fiocco. Guarda anche le vele: diventano bianche col bordo verde quando sono giuste. Anche la <b>rotella</b> le regola, a scatti da un quinto; se ti sembrano troppo fini, nel menù in alto alza il <i>passo rotelle</i>.",
  goal:"Tieni entrambe le vele nella fascia verde per 2 secondi",
  ok:()=>boat.stM==="ottima"&&(boat.stJ==="ottima"||boat.stJ==="aperta")},
 
