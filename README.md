@@ -4,6 +4,12 @@ Simulatore di navigazione a vela nel Mar Ionio. Fisica del vento apparente,
 angolo d'attacco delle vele, bilanciamento randa/fiocco, ombra di vento
 sottovento alle terre. Coste reali (Natural Earth), distanze ridotte 1:6.
 
+C'è anche una **modalità carriera** (tasto `I`): si trasportano carichi da
+un porto all'altro, si viene pagati a miglio e a tonnellata, e con quello
+che resta si comprano barche con più stiva. Giornale e carriera si portano
+da un dispositivo all'altro con un **codice di salvataggio** da copiare e
+incollare, o come file `.vela`: il gioco non ha né server né account.
+
 ## Comandi
 
 ```bash

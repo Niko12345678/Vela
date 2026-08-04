@@ -222,6 +222,7 @@ function newWorld(seedStr){
   gusts=[];for(let i=0;i<14;i++)gusts.push(newGust(true));
   cam.x=boat.x;cam.y=boat.y;streaks=[];for(let i=0;i<160;i++)streaks.push(spawnStreak(true));
   resetBoat();
+  carrieraVerificaCarta();          // altri porti: un incarico può non avere più un dove
 }
 function newGust(anywhere){
   const d=dv(windDirBase+Math.PI);
@@ -653,6 +654,7 @@ function comando(k,shift){
   if(k==="p")game.paused=!game.paused;
   if(k==="m")toggleMenu();
   if(k==="l")toggleLog();
+  if(k==="i")toggleCar();
   if(k==="c")toggleChart();
   if(k==="0"&&chart.on)chartFit();
   // sulla carta si cancella la rotta: Canc toglie l'ultimo punto,
@@ -1842,12 +1844,50 @@ function drawHUD(){
     }
   }
 
+  /* ── incarico a bordo: dove va il carico e quanto tempo resta */
+  let hInc=0;
+  if(CARRIERA.attiva&&CARRIERA.incarico){
+    const inc=CARRIERA.incarico, tw4=176, tx=14;
+    const ty=py+ph+10+(tp===px?74:0)+(voy&&voy.moving?(voy.ghost?62:46)+10:0);
+    panel(tx,ty,tw4,62);
+    label("INCARICO",tx+12,ty+16);
+    const resta=inc.limite-inc.t;
+    ctx.textAlign="right";ctx.font="10px ui-monospace,monospace";
+    ctx.fillStyle=resta<0?C("--warn"):(resta<inc.limite*0.2?C("--accent"):C("--chart-dim"));
+    ctx.fillText((resta<0?"−":"")+fmtT(Math.abs(resta)).split(".")[0],tx+tw4-12,ty+16);
+    ctx.textAlign="left";ctx.font="11px ui-monospace,monospace";ctx.fillStyle=C("--chart");
+    ctx.fillText("→ "+inc.a,tx+12,ty+34);
+    ctx.textAlign="right";ctx.fillStyle=C("--chart-dim");
+    ctx.fillText(eur(inc.paga),tx+tw4-12,ty+34);ctx.textAlign="left";
+    ctx.font="10px ui-monospace,monospace";
+    // il rilevamento del porto di destinazione: è l'unica cosa che serve
+    // sapere quando si naviga, il resto sta nel pannello
+    const pd=portoDi(inc.a);
+    if(pd){
+      const br=(angOf(pd.x-boat.x,pd.y-boat.y)*R2D+360)%360;
+      ctx.fillStyle=C("--chart-dim");
+      ctx.fillText("RIL "+String(Math.round(br)).padStart(3,"0")+"°",tx+12,ty+52);
+    }
+    // a destra la distanza, o l'avaria se c'è: l'avaria vince, perché è
+    // l'unica delle due che si può ancora smettere di peggiorare
+    ctx.textAlign="right";
+    if(inc.incagli){
+      ctx.fillStyle=C("--warn");ctx.fillText("merce bagnata",tx+tw4-12,ty+52);
+    }else if(pd){
+      ctx.fillStyle=C("--chart-dim");
+      ctx.fillText(nm(Math.hypot(pd.x-boat.x,pd.y-boat.y)).toFixed(1)+" nm",tx+tw4-12,ty+52);
+    }
+    ctx.textAlign="left";
+    hInc=62+10;
+  }
+
   /* ── rotta pianificata: il punto verso cui si va e quanto se ne è fuori */
   if(piano.pts.length){
     const tw3=176, tx=14;
     let ty=py+ph+10;                                   // sotto gli strumenti
     if(tp===px) ty+=74;                                // dove è finita anche la regata
     if(voy&&voy.moving) ty+=(voy.ghost?62:46)+10;
+    ty+=hInc;                                          // e sotto l'incarico, quando c'è
     const arrivato=piano.i>=piano.pts.length;
     panel(tx,ty,tw3,arrivato?46:62);
     label("ROTTA",tx+12,ty+16);
@@ -1948,6 +1988,13 @@ function startFrom(i){
 }
 portEl.onchange=e=>{
   const i=parseInt(e.target.value,10);e.target.blur();
+  // col carico a bordo il porto di partenza non si sceglie da un menù: si
+  // arriva navigando, se no la consegna sarebbe un teletrasporto
+  if(CARRIERA.attiva&&CARRIERA.incarico){
+    e.target.value=(world.ports||[]).findIndex(o=>o.n===voy.from);
+    say("Hai un carico per "+CARRIERA.incarico.a+": ci si va navigando");
+    return;
+  }
   if(game.started&&!game.done)
     askConfirm("Ripartire da "+world.ports[i].n+"? La regata in corso e il cronometro ripartono da zero.",()=>startFrom(i));
   else startFrom(i);
@@ -1961,12 +2008,26 @@ function fillBarche(){
   for(const id of FLOTTA.ordine){
     const b=FLOTTA.barche[id]; if(!b) continue;
     const op=document.createElement("option");
-    op.value=id;op.textContent=b.nome;op.title=b.sommario;
+    // in carriera il menù non nasconde le altre barche: le mostra col
+    // cartellino del prezzo, che è metà del motivo per andare a lavorare
+    const daComprare=CARRIERA.attiva&&!barcaTua(id);
+    op.value=id;op.textContent=b.nome+(daComprare?"  ("+eur(prezzoBarca(id))+")":"");
+    op.title=b.sommario;
     if(id===barcaId)op.selected=true;
     boatEl.appendChild(op);
   }
 }
 function cambiaBarca(id){
+  if(CARRIERA.attiva&&!barcaTua(id)){
+    boatEl.value=barcaId;
+    say(FLOTTA.barche[id].nome+" non è tua: costa "+eur(prezzoBarca(id))+" — la compri dalla carriera (I)");
+    return;
+  }
+  if(CARRIERA.attiva&&CARRIERA.incarico){
+    boatEl.value=barcaId;
+    say("Hai un carico a bordo: sbarcalo prima di cambiare barca");
+    return;
+  }
   if(!setBarca(id)){boatEl.value=barcaId;return;}
   resetBoat();
   say(barcaCorrente().nome+" — "+barcaCorrente().sommario);
@@ -2004,6 +2065,7 @@ function toggleHelp(){
 }
 document.getElementById("helpb").onclick=toggleHelp;
 document.getElementById("logb").onclick=e=>{e.currentTarget.blur();toggleLog();};
+document.getElementById("carb").onclick=e=>{e.currentTarget.blur();toggleCar();};
 document.getElementById("logclose").onclick=e=>{e.currentTarget.blur();toggleLog();};
 document.getElementById("logclear").onclick=e=>{e.currentTarget.blur();
   askConfirm("Cancellare tutto il giornale di bordo? Traversate, record e polare personale andranno persi.",
@@ -2482,9 +2544,12 @@ function startVoyage(from){
     let bw=-1;
     for(const k in LOG.best) if(k.startsWith(from+" → ")&&LOG.best[k].when>bw){bw=LOG.best[k].when;key=k;}
   }
-  if(key&&LOG.best[key]) voy.ghost={key,to:key.split(" → ")[1],...LOG.best[key]};
+  // il fantasma serve solo se ha una traccia da seguire: un record arrivato
+  // da un codice di salvataggio leggero ha il tempo ma non la linea
+  if(key&&LOG.best[key]&&LOG.best[key].track) voy.ghost={key,to:key.split(" → ")[1],...LOG.best[key]};
 }
 function voyUpdate(dt){
+  incaricoAvanza(dt);            // la scadenza del noleggiatore corre anche da fermi
   if(!voy||!world.ports||!world.ports.length) return;
   const sp=Math.hypot(boat.vx,boat.vy);
   if(!voy.moving){ if(sp>0.7) voy.moving=true; else return; }
@@ -2526,6 +2591,20 @@ function arrive(to){
     say("Arrivato a "+to+" — "+fmtT(voy.t).split(".")[0]+" · "+nm(voy.dist).toFixed(1)+
         " nm · "+avgKn(voy.dist,voy.t).toFixed(1)+" kn di media"+(p.rec?"   ★ RECORD":""));
     logRender();
+  }
+  // la consegna non passa dal filtro della traversata registrata: un carico
+  // sbarcato è un carico sbarcato, anche su una tratta corta
+  if(CARRIERA.attiva){
+    CARRIERA.miglia+=nm(voy.dist);
+    const c=consegnaIncarico(to);
+    if(c){
+      say("Consegna a "+to+": "+eur(c.paga)+
+          (c.ritardo?"   in ritardo di "+fmtMin(c.ritardo):"")+
+          (c.perso?"   merce persa "+Math.round(c.perso*100)+"%":"")+
+          "   ·   cassa "+eur(CARRIERA.soldi));
+    }
+    salvaCarriera();
+    carRender();
   }
   challenge=null;
   startVoyage(to);
@@ -2620,6 +2699,452 @@ function drawPolarChart(){
   g.fillText("— teorico a "+(windBase*1.94384).toFixed(0)+" kn di vento",10,H2-16);
   g.fillStyle=C("--accent");
   g.fillText(any?"• tuo massimo per settore":"• nessun dato tuo ancora",10,H2-4);
+}
+
+/* ══════════════════ carriera ══════════════════ */
+/* Il giornale di bordo registra già ogni traversata fra due porti veri: la
+   carriera le dà uno scopo. Un carico, una scadenza, una paga — e il mare
+   resta esattamente quello di prima, perché ogni euro passa comunque dal
+   saper arrivare prima con quel vento lì.
+   Quello che aggiunge davvero è una ragione per scegliere UNA barca: la
+   stiva del gozzo non regge i carichi che pagano, e la dodici da regata
+   vola ma non porta niente. Il prezzo e la stiva stanno in barche.json,
+   accanto a ogni scafo, perché sono roba della barca e non del gioco.
+
+   Tutto lo stato sta in `CARRIERA` ed è fatto di soli numeri e stringhe:
+   è la stessa roba che finisce nel codice di salvataggio portatile qui
+   sotto, e nient'altro deve entrarci. */
+const CARRIERA_BARCA="gozzo";       // si comincia dal gozzo: costa poco e insegna il vento
+const CARRIERA_SOLDI=1500;          // cassa iniziale: non basta per niente, ed è il punto
+const NOLO_FISSO=110, NOLO_TON=55;  // paga in euro per miglio: parte fissa + parte a tonnellata
+const VRIF=4.2;                     // nodi di riferimento con cui il noleggiatore stima le scadenze
+const RINUNCIA=0.2;                 // penale per un carico riconsegnato: un quinto della paga
+const MERCI=["olio","vino nuovo","sale","legname","reti da pesca","ricambi per il faro",
+             "posta e giornali","damigiane vuote","sacchi di farina","cassette di pesce",
+             "mattoni","ghiaccio","calce","corde e paranchi","agnelli vivi","miele"];
+const FRETTA=[{n:"comoda",kt:1.75,kp:0.85},{n:"normale",kt:1.30,kp:1},{n:"urgente",kt:1.02,kp:1.5}];
+
+function carrieraVuota(){
+  return {attiva:false,soldi:CARRIERA_SOLDI,barche:[CARRIERA_BARCA],incarico:null,
+          consegne:0,guadagno:0,miglia:0,seme:1,storia:[],
+          offerte:null,offertePorto:null,offerteSeme:0};
+}
+let CARRIERA=carrieraVuota();
+
+const eur=n=>Math.round(n).toLocaleString("it-IT")+" €";
+const prezzoBarca=id=>(FLOTTA.barche[id]&&FLOTTA.barche[id].prezzo)||0;
+const stivaBarca=id=>(FLOTTA.barche[id]&&FLOTTA.barche[id].stiva)||0;
+const barcaTua=id=>CARRIERA.barche.indexOf(id)>=0;
+function portoDi(n){ return (world.ports||[]).find(o=>o.n===n)||null; }
+
+/* Le offerte di un porto sono una FUNZIONE del porto e del seme, non un
+   tiro di dadi: chiudendo e riaprendo il pannello si ritrovano le stesse
+   tre, e un collaudo può verificarle senza rincorrere Math.random. Il seme
+   avanza quando accetti, quando consegni o quando chiedi altre offerte. */
+function offerteDi(porto,seme){
+  const p0=portoDi(porto); if(!p0) return [];
+  const cand=(world.ports||[])
+    .filter(o=>o.n!==porto&&o.n!=="Mare aperto")
+    .map(o=>({o,d:Math.hypot(o.x-p0.x,o.y-p0.y)}))
+    .filter(c=>c.d>900)                       // sotto le tre miglia non è una traversata, è una manovra
+    .sort((a,b)=>a.d-b.d);
+  if(!cand.length) return [];
+  const rng=mulberry32(hashStr(porto+"#"+seme));
+  const stive=FLOTTA.ordine.map(stivaBarca);
+  const stivaMax=Math.max(...stive), stivaMin=Math.min(...stive);
+  const out=[];
+  // una vicina, una di mezzo, una lontana: il porto non offre tre volte lo
+  // stesso viaggio, e la scelta è fra comodo e ben pagato
+  for(let f=0;f<3;f++){
+    const a=Math.floor(cand.length*f/3), b=Math.max(a+1,Math.floor(cand.length*(f+1)/3));
+    const c=cand[Math.min(cand.length-1,a+Math.floor(rng()*(b-a)))];
+    if(!c||out.some(v=>v.a===c.o.n)) continue;
+    const nmi=nm(c.d);
+    const fr=FRETTA[Math.floor(rng()*FRETTA.length)];
+    // La prima offerta sta SEMPRE nella stiva più piccola della flotta: con
+    // tre partite di sette tonnellate un porto direbbe a chi comincia
+    // "torna quando avrai una barca", che è il modo migliore di non farlo
+    // tornare. Le altre due crescono, fino alla stiva più capace: sono
+    // quelle che pagano, e sono il motivo per comprarsi una barca vera.
+    const tetto=[stivaMin,stivaMin+(stivaMax-stivaMin)*0.45,stivaMax][f];
+    const ton=Math.round((0.3+rng()*Math.max(0.1,tetto-0.3))*10)/10;
+    out.push({da:porto,a:c.o.n,merce:MERCI[Math.floor(rng()*MERCI.length)],ton,
+              fretta:fr.n,
+              paga:Math.round(nmi*(NOLO_FISSO+NOLO_TON*ton)*fr.kp),
+              limite:Math.round(c.d/(VRIF/1.94384)*fr.kt),
+              nmi:Math.round(nmi*10)/10});
+  }
+  return out;
+}
+function offerteCorrenti(){
+  const porto=voy?voy.from:null;
+  if(!porto) return [];
+  if(CARRIERA.offertePorto!==porto||CARRIERA.offerteSeme!==CARRIERA.seme||!CARRIERA.offerte){
+    CARRIERA.offerte=offerteDi(porto,CARRIERA.seme);
+    CARRIERA.offertePorto=porto;CARRIERA.offerteSeme=CARRIERA.seme;
+  }
+  return CARRIERA.offerte;
+}
+/* Accetta: restituisce null se il carico è a bordo, altrimenti il motivo in
+   chiaro, che è anche quello che va detto al marinaio. */
+function accettaOfferta(i){
+  if(!CARRIERA.attiva) return "La carriera non è cominciata";
+  if(CARRIERA.incarico) return "Hai già un carico a bordo";
+  const of=offerteCorrenti()[i];
+  if(!of) return "Offerta non più valida";
+  if(of.ton>stivaBarca(barcaId))
+    return barcaCorrente().nome+": stiva da "+stivaBarca(barcaId).toString().replace(".",",")+
+           " t, il carico è "+of.ton.toString().replace(".",",")+" t";
+  CARRIERA.incarico={...of,t:0,incagli:0,tocca:false};
+  CARRIERA.seme++;salvaCarriera();
+  return null;
+}
+function rinunciaIncarico(){
+  const inc=CARRIERA.incarico; if(!inc) return;
+  const penale=Math.min(CARRIERA.soldi,Math.round(inc.paga*RINUNCIA));
+  CARRIERA.soldi-=penale;CARRIERA.incarico=null;CARRIERA.seme++;
+  salvaCarriera();
+  say("Carico riconsegnato — penale "+eur(penale));
+}
+/* Il cronometro dell'incarico corre anche da fermi: è la scadenza del
+   noleggiatore, non il tempo al timone. Gli incagli invece si contano una
+   volta per volta, sul fronte di salita, se no un secondo sugli scogli ne
+   varrebbe cinquanta. */
+function incaricoAvanza(dt){
+  const inc=CARRIERA.incarico; if(!CARRIERA.attiva||!inc) return;
+  inc.t+=dt;
+  if(boat.grounded>0){ if(!inc.tocca){inc.tocca=true;inc.incagli++;} }
+  else inc.tocca=false;
+}
+function consegnaIncarico(to){
+  const inc=CARRIERA.incarico;
+  if(!CARRIERA.attiva||!inc||inc.a!==to) return null;
+  const ritardo=Math.max(0,inc.t-inc.limite);
+  // in ritardo si paga a scalare, ma mai meno di un terzo: il carico è
+  // arrivato lo stesso, ed è la differenza fra una multa e una beffa
+  const kRit=ritardo?clamp(1-ritardo/inc.limite*0.8,0.33,1):1;
+  const perso=Math.min(0.6,0.18*inc.incagli);          // toccando il fondo si bagna la merce
+  const paga=Math.round(inc.paga*kRit*(1-perso));
+  CARRIERA.soldi+=paga;CARRIERA.consegne++;CARRIERA.guadagno+=paga;
+  CARRIERA.storia.unshift({da:inc.da,a:to,merce:inc.merce,ton:inc.ton,paga,pattuita:inc.paga,
+                           t:Math.round(inc.t),limite:inc.limite,perso,quando:Date.now()});
+  if(CARRIERA.storia.length>40) CARRIERA.storia.length=40;
+  CARRIERA.incarico=null;CARRIERA.seme++;
+  salvaCarriera();
+  return {paga,ritardo,perso};
+}
+function compraBarca(id){
+  if(!CARRIERA.attiva) return "La carriera non è cominciata";
+  if(!FLOTTA.barche[id]) return "Barca sconosciuta";
+  if(barcaTua(id)) return "È già tua";
+  const p=prezzoBarca(id);
+  if(CARRIERA.soldi<p) return "Mancano "+eur(p-CARRIERA.soldi);
+  CARRIERA.soldi-=p;CARRIERA.barche.push(id);
+  salvaCarriera();
+  return null;
+}
+function carrieraInizia(){
+  CARRIERA=carrieraVuota();CARRIERA.attiva=true;   // una carriera nuova parte pulita
+  setBarca(CARRIERA_BARCA);if(boatEl)boatEl.value=CARRIERA_BARCA;
+  fillBarche();resetBoat();salvaCarriera();carRender();
+  say("Carriera aperta a "+(voy?voy.from:"—")+" — "+eur(CARRIERA.soldi)+" in cassa e un gozzo");
+}
+function carrieraChiudi(){
+  CARRIERA=carrieraVuota();
+  fillBarche();salvaCarriera();carRender();
+  say("Carriera abbandonata — si torna a navigare e basta");
+}
+/* Cambiando carta i porti dell'incarico possono non esistere più: il carico
+   non si perde per colpa tua, quindi decade senza penale. */
+function carrieraVerificaCarta(){
+  const inc=CARRIERA.incarico;
+  if(!CARRIERA.attiva||!inc) return;
+  if(!portoDi(inc.a)||!portoDi(inc.da)){
+    CARRIERA.incarico=null;CARRIERA.seme++;salvaCarriera();
+    say("Altra carta, altri porti: l'incarico per "+inc.a+" decade");
+  }
+}
+function salvaCarriera(){
+  // le offerte no: si ricalcolano da porto e seme, e nel salvataggio
+  // sarebbero solo peso morto che invecchia
+  const {offerte,offertePorto,offerteSeme,...c}=CARRIERA;
+  store.set("vela:carriera",c);
+}
+/* Ripulisce uno stato che arriva da fuori — archivio o codice di
+   salvataggio — e non merita fiducia: chiavi mancanti, barche che non
+   esistono più, numeri che non sono numeri. */
+function carrieraSana(c){
+  const b=carrieraVuota();
+  if(!c||typeof c!=="object") return b;
+  const num=(v,d)=>Number.isFinite(Number(v))?Number(v):d;
+  const out=carrieraVuota();
+  out.attiva=!!c.attiva;
+  out.soldi=Math.max(0,Math.round(num(c.soldi,b.soldi)));
+  out.consegne=Math.max(0,Math.round(num(c.consegne,0)));
+  out.guadagno=Math.max(0,Math.round(num(c.guadagno,0)));
+  out.miglia=Math.max(0,num(c.miglia,0));
+  out.seme=Math.max(1,Math.round(num(c.seme,1)));
+  out.barche=(Array.isArray(c.barche)?c.barche:[]).filter(id=>!!FLOTTA.barche[id]);
+  if(!out.barche.length) out.barche=[CARRIERA_BARCA];
+  out.storia=(Array.isArray(c.storia)?c.storia:[]).slice(0,40)
+    .filter(p=>p&&typeof p.a==="string").map(p=>({da:String(p.da||"—"),a:String(p.a),
+      merce:String(p.merce||"—"),ton:num(p.ton,0),paga:Math.round(num(p.paga,0)),
+      pattuita:Math.round(num(p.pattuita,num(p.paga,0))),t:Math.round(num(p.t,0)),
+      limite:Math.round(num(p.limite,0)),perso:num(p.perso,0),quando:num(p.quando,0)}));
+  const i=c.incarico;
+  if(i&&typeof i.a==="string"&&Number.isFinite(Number(i.paga)))
+    out.incarico={da:String(i.da||"—"),a:i.a,merce:String(i.merce||"—"),ton:num(i.ton,0.5),
+      fretta:String(i.fretta||"normale"),paga:Math.round(num(i.paga,0)),
+      limite:Math.max(1,Math.round(num(i.limite,600))),nmi:num(i.nmi,0),
+      t:Math.max(0,num(i.t,0)),incagli:Math.max(0,Math.round(num(i.incagli,0))),tocca:false};
+  return out;
+}
+async function caricaCarriera(){
+  const d=await store.get("vela:carriera");
+  if(d) CARRIERA=carrieraSana(d);
+  if(CARRIERA.attiva&&!barcaTua(barcaId)){setBarca(CARRIERA.barche[0]);if(boatEl)boatEl.value=barcaId;}
+  fillBarche();carRender();
+}
+
+/* ══════════════════ salvataggio portatile ══════════════════ */
+/* L'archivio del browser non attraversa i dispositivi: quello del telefono
+   e quello del computer sono due mondi separati, e senza un server non c'è
+   nessun modo di farli parlare da soli. Quindi il salvataggio si porta a
+   mano, come una carta d'imbarco: un codice di testo da copiare e incollare
+   dove vuoi, o lo stesso codice dentro un file .vela da passarsi via mail,
+   chiavetta o messaggio. Nessun account, niente rete, funziona ovunque giri
+   il gioco.
+
+   Il codice è `VELA1.<base64url del JSON>.<firma>`: la firma è l'hash che
+   il gioco già usa per i semi, e serve solo a dire "questo testo è arrivato
+   storto", non a impedire di modificarlo. Chi vuole barare con i propri
+   record è liberissimo. */
+const SALVA_V=1;
+const b64enc=s=>{
+  const by=new TextEncoder().encode(s);
+  let bin="";for(let i=0;i<by.length;i++)bin+=String.fromCharCode(by[i]);
+  return btoa(bin).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+};
+const b64dec=s=>{
+  const bin=atob(s.replace(/-/g,"+").replace(/_/g,"/"));
+  const by=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)by[i]=bin.charCodeAt(i);
+  return new TextDecoder().decode(by);
+};
+/* `leggero` butta via le tracce dei fantasmi, che da sole sono il grosso del
+   giornale: nel codice da incollare a mano contano più i record che la
+   linea sulla carta, e un codice di quarantamila caratteri non lo incolla
+   nessuno. Nel file, che nessuno legge a occhio, ci sta tutto. */
+function statoSalvabile(leggero){
+  const log=leggero
+    ? {passages:LOG.passages,polar:LOG.polar,
+       best:Object.fromEntries(Object.entries(LOG.best).map(([k,b])=>{const{track,...r}=b;return [k,r];}))}
+    : LOG;
+  const {offerte,offertePorto,offerteSeme,...car}=CARRIERA;
+  return {v:SALVA_V,gioco:"vela",quando:Date.now(),barca:barcaId,log,carriera:car};
+}
+function codificaStato(leggero){
+  const j=JSON.stringify(statoSalvabile(leggero));
+  return "VELA1."+b64enc(j)+"."+hashStr(j).toString(36);
+}
+function decodificaStato(codice){
+  const c=String(codice||"").trim().replace(/\s+/g,"");
+  const p=c.split(".");
+  if(p.length!==3||p[0]!=="VELA1") throw new Error("Non sembra un codice Vela");
+  let j;
+  try{ j=b64dec(p[1]); }catch(e){ throw new Error("Codice illeggibile: forse è stato tagliato"); }
+  if(hashStr(j).toString(36)!==p[2]) throw new Error("Codice danneggiato: la firma non torna");
+  let st;
+  try{ st=JSON.parse(j); }catch(e){ throw new Error("Codice illeggibile: forse è stato tagliato"); }
+  if(!st||st.gioco!=="vela") throw new Error("Non è un salvataggio di Vela");
+  if(Number(st.v)>SALVA_V) throw new Error("Salvataggio scritto da una versione più nuova del gioco");
+  return st;
+}
+/* Applica uno stato letto da fuori. Sostituisce, non fonde: un salvataggio
+   è una fotografia di una carriera, e mescolarla con quella che c'era qui
+   darebbe una terza carriera che non è vissuta da nessuna parte. */
+function applicaStato(st){
+  const l=st.log;
+  if(l&&Array.isArray(l.passages))
+    LOG={passages:l.passages,polar:l.polar||{},best:l.best||{}};
+  CARRIERA=carrieraSana(st.carriera);
+  if(st.barca&&FLOTTA.barche[st.barca]&&(!CARRIERA.attiva||barcaTua(st.barca))){
+    setBarca(st.barca);if(boatEl)boatEl.value=st.barca;
+  }else if(CARRIERA.attiva&&!barcaTua(barcaId)){
+    setBarca(CARRIERA.barche[0]);if(boatEl)boatEl.value=barcaId;
+  }
+  saveLog();salvaCarriera();
+  fillBarche();logRender();carRender();
+}
+
+/* ══════════════════ interfaccia della carriera ══════════════════ */
+const carEl=document.getElementById("carriera");
+if(carEl) carEl.addEventListener("pointerdown",e=>{if(e.target===carEl)toggleCar();});
+function toggleCar(){
+  if(!carEl) return;
+  carEl.classList.toggle("on");
+  if(carEl.classList.contains("on")) carRender();
+}
+function carDice(t,buona){
+  const el=document.getElementById("carmsg");
+  if(!el) return;
+  el.textContent=t||"";
+  el.style.color=buona?"var(--good)":"var(--warn)";
+}
+const fmtMin=s=>{const m=Math.floor(s/60);return m>=1?m+" min "+String(Math.floor(s%60)).padStart(2,"0")+" s":Math.round(s)+" s";};
+function carRender(){
+  if(!carEl||!carEl.classList.contains("on")) return;
+  const attiva=CARRIERA.attiva;
+  document.getElementById("carsum").innerHTML = attiva
+    ? "<b>"+eur(CARRIERA.soldi)+"</b> in cassa · <b>"+CARRIERA.consegne+"</b> consegne · <b>"+
+      CARRIERA.miglia.toFixed(1)+"</b> miglia di carriera · a bordo dello <b>"+barcaCorrente().nome+"</b>"+
+      "<span style='color:var(--chart-dim)'>   (salvataggio: "+storeKind+")</span>"
+    : "<div class='empty'>Nessuna carriera aperta. Si comincia con "+eur(CARRIERA_SOLDI)+
+      " e un gozzo: si portano carichi da un porto all'altro, si viene pagati a miglio e a tonnellata, "+
+      "e con quello che resta si compra una barca che ne porti di più.</div>";
+
+  /* ── incarico a bordo ── */
+  const inc=CARRIERA.incarico, incEl=document.getElementById("carinc");
+  if(attiva&&inc){
+    const resta=inc.limite-inc.t;
+    incEl.innerHTML="<table><tr><td><b>"+inc.da+" → "+inc.a+"</b></td><td class='n'>"+eur(inc.paga)+"</td></tr>"+
+      "<tr><td>"+inc.merce+" · "+String(inc.ton).replace(".",",")+" t · consegna "+inc.fretta+"</td>"+
+      "<td class='n'>"+inc.nmi.toFixed(1)+" nm</td></tr>"+
+      "<tr><td style='color:"+(resta>0?"var(--chart-dim)":"var(--warn)")+"'>"+
+      (resta>0?"restano "+fmtMin(resta):"in ritardo di "+fmtMin(-resta))+
+      (inc.incagli?" · "+inc.incagli+(inc.incagli>1?" incagli":" incaglio")+", merce bagnata":"")+
+      "</td><td class='n'><button id='carrin'>Rinuncia</button></td></tr></table>";
+    const rb=document.getElementById("carrin");
+    if(rb) rb.onclick=()=>{rinunciaIncarico();carRender();};
+  }else if(attiva){
+    incEl.innerHTML="<div class='empty'>Stiva vuota. Prendi un incarico dal porto qui sotto.</div>";
+  }else incEl.innerHTML="";
+
+  /* ── offerte del porto ── */
+  const offEl=document.getElementById("caroff");
+  if(attiva&&!inc){
+    const off=offerteCorrenti();
+    offEl.innerHTML = off.length
+      ? "<table>"+off.map((o,i)=>{
+          const regge=o.ton<=stivaBarca(barcaId);
+          return "<tr><td>→ <b>"+o.a+"</b><br><span style='color:var(--chart-dim)'>"+o.merce+" · "+
+            String(o.ton).replace(".",",")+" t · "+o.fretta+"</span></td>"+
+            "<td class='n'>"+o.nmi.toFixed(1)+" nm<br>"+fmtMin(o.limite)+"</td>"+
+            "<td class='n'>"+eur(o.paga)+"</td>"+
+            "<td><button data-o='"+i+"'"+(regge?"":" disabled title='Non ci sta in stiva'")+
+            ">Carica</button></td></tr>";
+        }).join("")+"</table>"+
+        "<div style='margin-top:8px'><button id='caraltre'>Altre offerte</button></div>"
+      : "<div class='empty'>Da qui non partono carichi: porta la barca in un porto della carta.</div>";
+    offEl.querySelectorAll("button").forEach(b=>{
+      b.onclick=e=>{
+        const d=e.currentTarget.dataset.o;
+        if(d===undefined||d===""){ CARRIERA.seme++;salvaCarriera();carDice("");carRender();return; }
+        const err=accettaOfferta(parseInt(d,10));
+        if(err) carDice(err,false);
+        else{ const q=CARRIERA.incarico; carDice("",true);
+              say("Carico a bordo: "+q.merce+" per "+q.a+" — "+eur(q.paga)+", "+fmtMin(q.limite)); }
+        carRender();
+      };
+    });
+  }else offEl.innerHTML="";
+
+  /* ── cantiere ── */
+  const flEl=document.getElementById("carflotta");
+  flEl.innerHTML = attiva
+    ? "<table>"+FLOTTA.ordine.map(id=>{
+        const b=FLOTTA.barche[id]; if(!b) return "";
+        const tua=barcaTua(id), qui=id===barcaId;
+        return "<tr><td><b>"+b.nome+"</b><br><span style='color:var(--chart-dim)'>stiva "+
+          String(stivaBarca(id)).replace(".",",")+" t · "+b.sommario+"</span></td>"+
+          "<td class='n'>"+(tua?"":eur(prezzoBarca(id)))+"</td><td>"+
+          (qui?"<span style='color:var(--good)'>a bordo</span>"
+             :tua?"<button data-i='"+id+"'>Imbarca</button>"
+                 :"<button data-c='"+id+"'>Compra</button>")+"</td></tr>";
+      }).join("")+"</table>"
+    : "";
+  flEl.querySelectorAll("button").forEach(b=>{
+    b.onclick=e=>{
+      const c=e.currentTarget.dataset.c, i=e.currentTarget.dataset.i;
+      if(c){
+        const err=compraBarca(c);
+        carDice(err||FLOTTA.barche[c].nome+" è tua — "+eur(CARRIERA.soldi)+" in cassa",!err);
+      }else if(i){
+        if(CARRIERA.incarico) carDice("Prima sbarca il carico: non si cambia barca con la stiva piena",false);
+        else{ cambiaBarca(i); if(boatEl)boatEl.value=barcaId; carDice("A bordo dello "+FLOTTA.barche[i].nome,true); }
+      }
+      carRender();
+    };
+  });
+
+  /* ── consegne fatte ── */
+  const stEl=document.getElementById("carstoria");
+  if(stEl) stEl.innerHTML = attiva&&CARRIERA.storia.length
+    ? "<table>"+CARRIERA.storia.slice(0,10).map(p=>
+        "<tr><td>"+p.da+" → "+p.a+"</td><td class='n'>"+eur(p.paga)+"</td>"+
+        "<td class='r'>"+(p.paga<p.pattuita?"−"+Math.round((1-p.paga/(p.pattuita||1))*100)+"%":"★")+
+        "</td></tr>").join("")+"</table>"
+    : "";
+  const sb=document.getElementById("carstart");
+  if(sb) sb.textContent=attiva?"Ricomincia da capo":"Comincia la carriera";
+}
+function carSalvaCodice(leggero){
+  const ta=document.getElementById("carcode");
+  const c=codificaStato(leggero);
+  if(ta){ ta.value=c; try{ ta.focus();ta.select&&ta.select(); }catch(e){} }
+  return c;
+}
+if(carEl){
+  document.getElementById("carclose").onclick=e=>{e.currentTarget.blur();toggleCar();};
+  document.getElementById("carstart").onclick=e=>{e.currentTarget.blur();
+    if(CARRIERA.attiva)
+      askConfirm("Ricominciare la carriera da capo? Cassa, flotta e consegne tornano a zero.",
+        ()=>{carrieraInizia();carDice("");});
+    else{carrieraInizia();carDice("");}
+  };
+  document.getElementById("carclear").onclick=e=>{e.currentTarget.blur();
+    askConfirm("Abbandonare la carriera? Cassa, barche comprate e consegne vanno perse. "+
+               "Se vuoi tenerla, genera prima un codice di salvataggio.",carrieraChiudi);};
+  document.getElementById("carexp").onclick=e=>{e.currentTarget.blur();
+    const c=carSalvaCodice(true);
+    carDice("Codice pronto: "+c.length+" caratteri. Copialo e incollalo sull'altro dispositivo.",true);};
+  document.getElementById("carcopy").onclick=async e=>{e.currentTarget.blur();
+    const c=document.getElementById("carcode").value||carSalvaCodice(true);
+    try{ await navigator.clipboard.writeText(c); carDice("Codice copiato negli appunti",true); }
+    catch(err){ carDice("Gli appunti non si aprono: seleziona il codice e copialo a mano",false); }};
+  document.getElementById("carfile").onclick=e=>{e.currentTarget.blur();
+    try{
+      const c=codificaStato(false);                     // nel file ci sta tutto, tracce comprese
+      const b=new Blob([c],{type:"text/plain"});
+      const u=URL.createObjectURL(b), a=document.createElement("a");
+      const d=new Date(), p=n=>String(n).padStart(2,"0");
+      a.href=u;a.download="vela-"+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+".vela";
+      a.click();setTimeout(()=>URL.revokeObjectURL(u),4000);
+      carDice("File scaricato: portalo dove vuoi e aprilo da lì",true);
+    }catch(err){ carDice("Il browser non lascia scaricare il file: usa il codice",false); }};
+  document.getElementById("carimp").onclick=e=>{e.currentTarget.blur();
+    caricaCodice(document.getElementById("carcode").value);};
+  document.getElementById("carload").onclick=e=>{e.currentTarget.blur();
+    document.getElementById("carfilein").click();};
+  document.getElementById("carfilein").onchange=async e=>{
+    const f=e.target.files&&e.target.files[0]; if(!f) return;
+    try{ caricaCodice(await f.text()); }catch(err){ carDice("Il file non si legge",false); }
+    e.target.value="";
+  };
+}
+/* Un codice che arriva da fuori sostituisce tutto: si chiede conferma, ed è
+   l'ultima occasione per generarne uno di quello che c'è adesso. */
+function caricaCodice(txt){
+  let st;
+  try{ st=decodificaStato(txt); }
+  catch(err){ carDice(err.message,false); return; }
+  const q=st.quando?new Date(st.quando).toLocaleDateString("it-IT"):"data ignota";
+  const c=st.carriera&&st.carriera.attiva
+    ? "carriera con "+eur(st.carriera.soldi||0)+" e "+(st.carriera.consegne||0)+" consegne"
+    : "solo giornale di bordo";
+  askConfirm("Caricare il salvataggio del "+q+" ("+c+")? Quello che c'è adesso su questo dispositivo viene sostituito.",
+    ()=>{applicaStato(st);carDice("Salvataggio caricato",true);
+         say("Salvataggio caricato — "+(CARRIERA.attiva?eur(CARRIERA.soldi)+" in cassa":"giornale di bordo"));});
 }
 
 /* ══════════════════ tutorial ══════════════════ */
@@ -2764,6 +3289,7 @@ document.getElementById("tutb").onclick=e=>{e.currentTarget.blur();tutStart();};
 fillBarche();
 newWorld("mantova");
 loadLog();
+caricaCarriera();
 helpEl.classList.add("on");
 // su schermo piccolo il menù aperto coprirebbe mezzo mare — in orizzontale
 // tutto: si parte col solo ☰, che è dove il telefono se lo aspetta
@@ -2772,7 +3298,7 @@ let last=performance.now();
 function frame(now){
   let dt=clamp((now-last)/1000,0,0.05);last=now;   // mai negativo: un timestamp anomalo faceva esplodere la fisica
   if(!game.paused && !chart.on && !helpEl.classList.contains("on") && !askEl.classList.contains("on")
-     && !logEl.classList.contains("on")){
+     && !logEl.classList.contains("on") && !(carEl&&carEl.classList.contains("on"))){
     const sdt=dt*timeScale;                              // il tempo simulato scorre più in fretta
     game.t+=sdt;
     input(sdt);

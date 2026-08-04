@@ -6,6 +6,7 @@ stato (`boat`, `game`, vento) → fisica
 (`sailAero`, `aeroC`, `bestTrim`, `polarSpeed`, `trimWindows`, `physics`,
 `autopilot`) → tratteggi del vento → input → disegno → strumenti →
 interfaccia → rotta pianificata → carta nautica → giornale di bordo →
+carriera → salvataggio portatile → interfaccia della carriera →
 tutorial → ciclo.
 
 Quattro cose da sapere prima di toccarlo:
@@ -23,7 +24,12 @@ Quattro cose da sapere prima di toccarlo:
   per 200 k campioni). Non metterci dentro allocazioni.
 - **Il salvataggio è a strati** (`store`): archivio degli artefatti se
   esiste, altrimenti `localStorage`, altrimenti memoria di sessione.
-  Nessuno dei tre è garantito: non dare per scontato che `LOG` sopravviva.
+  Nessuno dei tre è garantito: non dare per scontato che `LOG` o `CARRIERA`
+  sopravvivano. Nessuno dei tre attraversa i dispositivi, ed è il motivo
+  per cui esiste il codice di salvataggio portatile (`codificaStato` /
+  `decodificaStato`): tutto quello che aggiungi allo stato persistente deve
+  essere serializzabile in JSON e passare da `carrieraSana()` in entrata,
+  perché quel testo lo può aver scritto chiunque.
 
 **Niente `import` qui dentro.** La harness esegue questo file dentro una
 `new Function`, dove una dichiarazione `import` è un errore di sintassi:
