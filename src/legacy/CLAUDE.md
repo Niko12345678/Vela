@@ -5,8 +5,8 @@ costanti `K` → mondo (`mkIsland`, `landDepth`, `buildShade`, `genWorld`) →
 stato (`boat`, `game`, vento) → fisica
 (`sailAero`, `aeroC`, `bestTrim`, `polarSpeed`, `trimWindows`, `physics`,
 `autopilot`) → tratteggi del vento → input → disegno → strumenti →
-interfaccia → rotta pianificata → pianificazione dei bordi → carta
-nautica → giornale di bordo →
+interfaccia → rotta pianificata → pianificazione dei bordi → consiglio di
+rotta → carta nautica → giornale di bordo →
 carriera → salvataggio portatile → interfaccia della carriera →
 tutorial → ciclo.
 
