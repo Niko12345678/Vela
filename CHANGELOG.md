@@ -89,6 +89,18 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
   flotta, e la carta che disegna tutto senza NaN e senza muovere la barca.
 
 ### Corretto
+- **La rotta consigliata non taglia più le penisole.** La griglia del
+  consiglio guarda i nodi nei loro punti, e una lingua di terra più stretta
+  della maglia — che su una traversata lunga arriva ai trecento metri —
+  passava fra una fila di nodi e l'altra senza farsi vedere: dodici coppie
+  di porti su 272 uscivano con una tratta sopra la terra. Ora ogni salto
+  della griglia si verifica per intero. Il controllo che serve quasi sempre
+  è gratis: di ogni nodo si tiene la distanza dalla costa, e se quella dei
+  due capi copre la lunghezza del salto in mezzo non ci può essere niente.
+  Solo dove non basta — vicino a una costa, cioè dove la domanda è vera —
+  la terra si va a guardare campionando la congiungente. Le 272 traversate
+  ora passano tutte in acqua, con almeno 109 m di distanza dalla costa, e
+  costano complessivamente il 25% in più di conto.
 - **Nei campi del menù la tastiera scrive, non comanda.** Scrivere un seme
   era impossibile: ogni lettera era anche una scorciatoia, e "mantova"
   faceva sparire il menù sulla M, rigenerava la carta sulla N, apriva la

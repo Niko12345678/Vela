@@ -2703,13 +2703,29 @@ function consGriglia(ax,ay,bx,by,marg){
   const nx=Math.floor(lx/passo)+1, ny=Math.floor(ly/passo)+1;
   const isl=(world&&world.islands)||[];
   const nav=new Uint8Array(nx*ny);
-  for(let j=0;j<ny;j++)for(let i=0;i<nx;i++)
-    nav[j*nx+i]=landDepth(isl,x0+i*passo,y0+j*passo)<-CONS_ACQUA?1:0;
-  return {x0,y0,nx,ny,passo,nav,
+  // di ogni nodo si tiene anche QUANTA acqua ha attorno: è la distanza
+  // dalla costa più vicina, e serve a dire se il salto fino al nodo
+  // accanto può incontrare terra senza doverla andare a cercare
+  const prof=new Float32Array(nx*ny);
+  for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){
+    const d=-landDepth(isl,x0+i*passo,y0+j*passo);
+    prof[j*nx+i]=d;
+    nav[j*nx+i]=d>CONS_ACQUA?1:0;
+  }
+  return {x0,y0,nx,ny,passo,nav,prof,
           wx:i=>x0+i*passo, wy:j=>y0+j*passo};
 }
-/* Un salto è buono solo se sono in acqua anche le celle che attraversa: se
-   no si passa in diagonale fra due scogli che si toccano. */
+/* Un salto è buono solo se è in acqua tutto quanto, non solo ai due capi.
+   Guardare le celle che attraversa non basta: le celle si guardano nei
+   loro nodi, e una lingua di terra più stretta della maglia passa fra un
+   nodo e l'altro senza farsi vedere — è così che una rotta consigliata
+   tagliava la penisola di Palairos.
+
+   Il primo controllo è gratis: se la distanza dalla costa dei due capi
+   copre la lunghezza del salto, in mezzo non ci può essere niente. Vale
+   per la grande maggioranza dei lati, che stanno al largo. Quando non
+   basta — cioè vicino a una costa, dove la domanda è vera — la terra si va
+   a guardare davvero, campionando la congiungente.                      */
 function consSalto(G,i0,j0,i1,j1){
   const n=Math.max(2,Math.ceil(Math.hypot(i1-i0,j1-j0)*2));
   for(let k=0;k<=n;k++){
@@ -2717,7 +2733,9 @@ function consSalto(G,i0,j0,i1,j1){
     const i=Math.round(i0+(i1-i0)*t), j=Math.round(j0+(j1-j0)*t);
     if(!G.nav[j*G.nx+i])return false;
   }
-  return true;
+  const L=Math.hypot(i1-i0,j1-j0)*G.passo;
+  if(L<=G.prof[j0*G.nx+i0]+G.prof[j1*G.nx+i1]-2*CONS_ACQUA)return true;
+  return consMareLibero({x:G.wx(i0),y:G.wy(j0)},{x:G.wx(i1),y:G.wy(j1)},false,false);
 }
 /* Il nodo navigabile più vicino a un punto, cercato a spirale: un porto
    vero sta a riva, quindi il nodo sopra il porto è quasi sempre "terra" e
