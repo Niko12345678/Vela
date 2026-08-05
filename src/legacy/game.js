@@ -2612,9 +2612,10 @@ function drawBordiPannello(bp,S){
      di bolina la velocità utile è la VMG diviso il coseno: è esattamente
      il tempo che `bordiPer` calcola per la stessa tratta — stesso
      parallelogramma — e un collaudo lo verifica. La griglia non ha quindi
-     bisogno di disegnare gli zigzag per pagarli, e infatti non li disegna:
-     a mare libero, controvento, il consiglio resta una linea sola e i
-     bordi li chiedi a V. Sono due domande diverse.
+     bisogno di disegnare gli zigzag per pagarli, e cerca la strada su
+     linee dritte. I bordi si disegnano dopo, in `consBordeggia`, sulle
+     tratte che la barca non può tenere: la rotta che esce è una rotta
+     navigabile prua per prua, non una linea che entra nel vento.
    - **I punti che restano sono pochi.** Dalla griglia esce una scaletta di
      nodi; si tengono solo quelli che servono, unendo due tratte in una
      ogni volta che la linea dritta è libera e non costa più di una briciola
@@ -2623,7 +2624,8 @@ function drawBordiPannello(bp,S){
      obiettivo e non un tetto — si prova a unire con tolleranze via via più
      larghe finché i punti non scendono lì sotto, ma un giro largo attorno a
      Cefalonia di punti ne chiede una dozzina e nessuna tolleranza glieli
-     toglie: quelli sono terra, non pignoleria.                          */
+     toglie: quelli sono terra, non pignoleria. Il conto è fatto prima dei
+     bordi: le virate si aggiungono dopo, e sono manovre, non posti.    */
 const CONS_ACQUA=110;        // margine dalla costa sotto cui un nodo non è navigabile
 const CONS_LATO=52;          // nodi per lato della griglia: è lui a fissare il costo del conto
 const CONS_MARGINI=[0.28,0.7,1.5];  // quanto il riquadro si allarga oltre la congiungente
@@ -2834,6 +2836,135 @@ function consScaletta(pts,passo,toll){
   }
   return cur;
 }
+/* Le tratte che la barca NON PUÒ TENERE si aprono in bordi veri.
+
+   La prima versione lasciava la spezzata dritta anche quando puntava dentro
+   il vento, col ragionamento che i bordi sono un'altra domanda e li chiede
+   `V`. Era sbagliato, e in mare si vede subito: la rotta tracciata è quella
+   che poi si segue, e seguirne una che passa sotto l'angolo di bolina vuol
+   dire fileggiare e fermarsi in panne. Una rotta che non si può navigare
+   non è un consiglio.
+
+   Gli angoli sono quelli di `bordiPer`, gli stessi di `V` — le due mure di
+   massima VMG — ma i bordi non si costruiscono col parallelogramma. Un
+   parallelogramma dà UNA virata sola, col vertice a miglia di lato dalla
+   congiungente: al largo è giusto e in un canale è terra. Si bordeggia
+   invece come si bordeggia davvero, un bordo per volta, e a decidere quando
+   virare sono la layline e l'acqua che c'è: da lì vengono da sole le tre
+   cose che uno zigzag disegnato a tavolino non sa fare — i bordi corti
+   dentro un canale, quelli lunghi al largo, le mure sbilanciate quando la
+   terra è da una parte sola. Quando nemmeno così si passa, la tratta resta
+   dritta ed è segnata come troppo stretta: lì non ci si va a vela, e dirlo
+   è meglio che disegnare una rotta che manda in panne.                  */
+const CONS_BORDO=2600;       // lunghezza massima di un bordo: oltre, si vira comunque
+const CONS_PASSI_MAX=16;     // e quante virate al massimo per una tratta sola
+const CONS_BORDO_MIN=80;     // sotto, non è un bordo: è un tentativo di girarsi
+const CONS_USCITA=400;       // sotto, una tratta stretta è l'uscita da un porto, non un consiglio
+const CONS_PINZA=8*Math.PI/180;   // di quanto si può stringere sopra l'ottimo senza che sia un problema
+
+/* Acqua libera davanti, lungo una rotta: si va avanti finché si può e si
+   torna all'ultimo campione buono. `salta` è il tratto iniziale da non
+   guardare, che serve quando si parte da dentro un porto. */
+function consAcquaAvanti(x,y,h,max,salta){
+  const isl=(world&&world.islands)||[];
+  if(!isl.length)return max;
+  const u=dv(h);
+  let d=0;
+  for(let s=60;s<=max;s+=60){
+    if(s>(salta||0)&&landDepth(isl,x+u.x*s,y+u.y*s)>-CONS_ACQUA)return d;
+    d=s;
+  }
+  return max;
+}
+/* I bordi di UNA tratta, generati come si bordeggia davvero: si tiene la
+   mura finché si arriva alla **layline** dell'altra — la linea da cui il
+   bersaglio si prende senza virare più — oppure finché c'è acqua, e lì si
+   vira. Da qui vengono da sole le tre cose che uno zigzag simmetrico non
+   sa fare: i bordi corti dentro un canale, quelli lunghi al largo, e le
+   mure sbilanciate quando la terra è da una parte sola.
+
+   Vale nello stesso modo per la bolina e per la poppa: cambia solo quale
+   dei due limiti dell'andatura si sta toccando.                         */
+function consZigzag(ax,ay,bx,by,from,spd,capoA,capoB){
+  const A=andature(spd);
+  const at0=Math.abs(norm(from-angOf(bx-ax,by-ay)));
+  const stretta=at0<A.bolina.twa;
+  if(!stretta&&at0<=A.poppa.twa)return [];        // la linea si tiene: niente bordi
+  const limite=stretta?A.bolina.twa:A.poppa.twa;
+  const U=[dv(norm(from-limite)),dv(norm(from+limite))];
+  const salta=CONS_ACQUA*2;
+  const pts=[];
+  let cx=ax, cy=ay;
+  // la mura di partenza è quella con più acqua libera davanti: è la scelta
+  // che si fa uscendo da un porto, e tiene la prima virata lontana dalla
+  // costa da cui si è appena usciti
+  const acqua0=U.map(u=>consAcquaAvanti(ax,ay,angOf(u.x,u.y),CONS_BORDO,capoA?salta:0));
+  let mura=acqua0[1]>acqua0[0]?1:0;
+  let uscito=false;
+  for(let passo=0;passo<CONS_PASSI_MAX;passo++){
+    const rem=Math.hypot(bx-cx,by-cy);
+    if(rem<CONS_BORDO_MIN)break;
+    const twaR=Math.abs(norm(from-angOf(bx-cx,by-cy)));
+    const puoi=stretta?twaR>=limite-1e-9:twaR<=limite+1e-9;
+    if(puoi&&consMareLibero({x:cx,y:cy},{x:bx,y:by},capoA&&!pts.length,capoB))break;
+    let mosso=false;
+    for(let prova=0;prova<2&&!mosso;prova++){
+      const i=(mura+prova)%2, j=1-i, u=U[i], v=U[j];
+      // fin dove si tiene questa mura prima di passare la layline dell'altra
+      const det=u.x*v.y-u.y*v.x;
+      let lay=det?((bx-cx)*v.y-(by-cy)*v.x)/det:Infinity;
+      if(!(lay>0))lay=Infinity;
+      const h=angOf(u.x,u.y);
+      const voluto=Math.min(lay,CONS_BORDO);
+      const acqua=consAcquaAvanti(cx,cy,h,voluto+60,capoA&&!pts.length?salta:0);
+      // se a fermare il bordo è la terra e non la layline, si vira un po'
+      // prima di arrivarci: tirare fino allo scoglio vuol dire ritrovarsi
+      // in fondo a una baia senza spazio per virare da nessuna delle due parti
+      const d=Math.min(voluto,acqua>=voluto?Infinity:acqua*0.8);
+      if(d<CONS_BORDO_MIN)continue;             // da questa parte non c'è spazio
+      cx+=u.x*d; cy+=u.y*d;
+      pts.push({x:Math.round(cx),y:Math.round(cy),virata:stretta?"bolina":"poppa"});
+      mura=j; mosso=true;
+    }
+    if(!mosso){
+      // dentro un porto non c'è spazio per virare da nessuna delle due
+      // parti, ed è normale: da lì si esce e basta, come si esce davvero.
+      // Si mette un punto all'imboccatura e si comincia a bordeggiare da
+      // lì, invece di rinunciare a tutta la tratta
+      if(!pts.length&&capoA&&!uscito&&rem>salta*2){
+        uscito=true;
+        const u=dv(angOf(bx-cx,by-cy));
+        cx+=u.x*salta; cy+=u.y*salta;
+        pts.push({x:Math.round(cx),y:Math.round(cy),uscita:true});
+        continue;
+      }
+      break;      // incastrati: si tiene quello che si è guadagnato finora
+    }
+  }
+  // l'ultimo punto è di troppo se il bersaglio è lì accanto
+  while(pts.length&&Math.hypot(pts[pts.length-1].x-bx,pts[pts.length-1].y-by)<CONS_BORDO_MIN)pts.pop();
+  // e il ritorno sul bersaglio dev'essere in acqua: se il bordeggio si è
+  // fermato in un posto da cui non si chiude, si torna indietro di un bordo
+  while(pts.length){
+    const u=pts[pts.length-1];
+    if(consMareLibero({x:u.x,y:u.y},{x:bx,y:by},false,capoB))break;
+    pts.pop();
+  }
+  return pts.length?pts:null;
+}
+function consBordeggia(ax,ay,punti){
+  const out=[];
+  let px=ax,py=ay;
+  punti.forEach((p,k)=>{
+    const capoA=k===0, capoB=k===punti.length-1;
+    const w=windAt((px+p.x)/2,(py+p.y)/2);
+    const messi=consZigzag(px,py,p.x,p.y,w.from,w.spd,capoA,capoB);
+    if(messi)for(const q of messi)out.push(q);
+    out.push({x:p.x,y:p.y});
+    px=p.x;py=p.y;
+  });
+  return out;
+}
 /* Il piano completo da A a B. Torna null se non trova acqua per arrivarci
    nemmeno allargando il riquadro: succede coi punti a terra, ed è giusto
    che lo dica invece di inventare una rotta. */
@@ -2869,7 +3000,8 @@ function consRifinisci(G,r,ax,ay,bx,by){
     corta=consScaletta(pts,G.passo,toll);
     if(corta.length-1<=CONS_PUNTI)break;
   }
-  const punti=corta.slice(1).map(p=>({x:Math.round(p.x),y:Math.round(p.y)}));
+  const grezzi=corta.slice(1).map(p=>({x:Math.round(p.x),y:Math.round(p.y)}));
+  const punti=consBordeggia(ax,ay,grezzi);
   const w0=windAt(ax,ay);
   const out={da:{x:ax,y:ay},a:{x:bx,y:by},punti,tratte:[],t:0,totale:0,
              dist:Math.hypot(bx-ax,by-ay),passo:G.passo,vento:{da:w0.from,spd:w0.spd}};
@@ -2879,12 +3011,29 @@ function consRifinisci(G,r,ax,ay,bx,by){
     const b=bordiPer(px,py,p.x,p.y,w.from,w.spd);
     const t=consTempo(px,py,p.x,p.y,G.passo);
     const d=Math.hypot(p.x-px,p.y-py);
+    // Una tratta è tenibile se sta fuori dalla zona morta. La tolleranza è
+    // larga di proposito: il vento cambia lungo la tratta e con lui
+    // l'angolo di bolina, e un bordo che stringe di qualche grado sopra
+    // l'ottimo si naviga benissimo, si va solo un po' più piano. Quello che
+    // va detto è la tratta che punta DENTRO il vento, dove ci si ferma. E
+    // si guardano solo le tratte lunghe: l'uscita da un porto stretto è una
+    // manovra di poche centinaia di metri, non un consiglio di rotta —
+    // nessuno issa le vele in banchina
+    const A=andature(w.spd);
+    const stretta=!!b&&d>CONS_USCITA&&Math.abs(b.twa)<A.bolina.twa-CONS_PINZA;
+    // `virata` sul punto dice che lì la tratta finisce perché si cambia
+    // mure, non perché si è arrivati da qualche parte
     out.tratte.push({da:{x:px,y:py},a:{x:p.x,y:p.y},dist:d,t,
-                     ril:angOf(p.x-px,p.y-py),
+                     ril:angOf(p.x-px,p.y-py),virata:p.virata||null,stretta,
                      tipo:b?b.tipo:"diretta",twa:b?b.twa:0,vento:{da:w.from,spd:w.spd}});
     out.t+=t; out.totale+=d;
     px=p.x;py=p.y;
   }
+  out.virate=punti.filter(p=>p.virata==="bolina").length;
+  out.strambate=punti.filter(p=>p.virata==="poppa").length;
+  // le tratte che nemmeno bordeggiando sono riuscite a stare in acqua: la
+  // barca lì non ci passa a vela, e dirlo è meglio che far finta di niente
+  out.strette=out.tratte.filter(t=>t.stretta).length;
   out.allunga=out.dist>0?out.totale/out.dist:1;
   // il tempo della linea dritta, per dire cosa è costata la deviazione
   out.tDiretta=consTempo(ax,ay,bx,by,G.passo);
@@ -2914,6 +3063,20 @@ function consiglioBersaglio(){
   }
   return null;
 }
+/* "2 virate", "una strambata": le manovre in chiaro, perché i punti dove
+   si cambia mure non si contano come gli altri. */
+function manovreDi(c){
+  const p=[];
+  if(c.virate)p.push(c.virate===1?"una virata":c.virate+" virate");
+  if(c.strambate)p.push(c.strambate===1?"una strambata":c.strambate+" strambate");
+  let s=p.length?" · "+p.join(" e "):"";
+  // dove i bordi non ci stanno — un canale stretto, l'imboccatura di una
+  // baia — la tratta resta com'è e lo si dice: è lì che si va a motore, o
+  // si guarda la carta e si decide a mano
+  if(c.strette)s+=" · attenzione: "+(c.strette===1?"una tratta è troppo stretta al vento"
+                                                  :c.strette+" tratte sono troppo strette al vento");
+  return s;
+}
 /* La rotta consigliata prende il posto di quella a matita: è la stessa
    spezzata, e tenerne due sulla carta vorrebbe dire non sapere più quale
    si sta seguendo. Chi ne aveva una tracciata se lo sente dire. */
@@ -2928,13 +3091,11 @@ function consiglioApplica(){
   for(const p of c.punti)piano.pts.push({x:p.x,y:p.y});
   piano.i=0;piano.da={x:boat.x,y:boat.y};
   consiglio=c;
-  // le tratte da fare di bolina si dicono subito: sono quelle che la barca
-  // non può tenere in linea, e sono il motivo per cui esiste anche V
-  const bol=c.tratte.filter(t=>t.tipo==="bolina").length;
+  // le virate e le strambate si dicono subito: sono i punti che non sono
+  // "un posto dove passare" ma "una manovra da fare"
   say("Rotta consigliata"+(b.nome?" per "+b.nome:"")+": "+c.punti.length+
       (c.punti.length===1?" punto · ":" punti · ")+nm(c.totale).toFixed(2)+" nm · "+
-      realT(c.t)+" col vento di adesso"+
-      (bol?" · "+bol+(bol===1?" tratta di bolina: lì si bordeggia (V)":" tratte di bolina: lì si bordeggia (V)"):"")+
+      realT(c.t)+" col vento di adesso"+manovreDi(c)+
       (cera?" (sostituisce la rotta tracciata)":""));
   return c;
 }
@@ -3206,6 +3367,7 @@ function drawChart(){
     ctx.fillText(stretto
       ? "CONSIGLIATA"+dove+" · "+pianoResta().toFixed(2)+" nm · "+realT(cons.t).toUpperCase()
       : "ROTTA CONSIGLIATA"+dove+" · "+cons.punti.length+(cons.punti.length===1?" PUNTO":" PUNTI")+
+        manovreDi(cons).toUpperCase()+
         " · "+pianoResta().toFixed(2)+" nm DA QUI  ·  "+realT(cons.t).toUpperCase()+
         " COL VENTO DI ADESSO  ·  U LA RIFÀ  ·  CANC L'ULTIMO PUNTO",24,60);
   }else if(piano.pts.length){
