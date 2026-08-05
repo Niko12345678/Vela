@@ -144,6 +144,78 @@ test("l'ombra di vento si aggira anche dove il mare è libero", async () => {
   assert.ok(r.t > r.tSenzaOmbra, "l'ombra si paga comunque: aggirarla costa più che non averla");
 });
 
+test("una lingua di terra più stretta della maglia non si taglia lo stesso", async () => {
+  const r = await runInGame(`
+    ${MONDO}
+    // Un muro di terra sottile in mezzo alla rotta. I nodi della griglia si
+    // guardano nei loro punti, e una striscia più stretta del passo può
+    // passare fra una fila di nodi e l'altra senza farsi vedere: è così che
+    // una rotta consigliata tagliava una penisola. Lo si prova a quattro
+    // altezze diverse, perché a seconda di dove cade il muro rispetto alle
+    // file di nodi il tranello scatta o no
+    const muro = (cy, sp) =>
+      mkIsland([-2000, cy-sp, 2000, cy-sp, 2000, cy+sp, -2000, cy+sp], "istmo");
+    const casi = [];
+    for (const cy of [-3000, -2910, -2820, -2730]) {
+      world.islands = [muro(cy, 30)];               // sessanta metri di terra in tutto
+      world.shade = [];
+      const c = consigliaRotta(0, 0, 0, -6000);
+      let dentro = 0, px = 0, py = 0;
+      if (c) for (const p of c.punti) {
+        const n = Math.ceil(Math.hypot(p.x-px, p.y-py) / 20);
+        for (let i = 0; i <= n; i++) {
+          const t = i/n;
+          if (landDepth(world.islands, px+(p.x-px)*t, py+(p.y-py)*t) > 0) dentro++;
+        }
+        px = p.x; py = p.y;
+      }
+      casi.push({ cy, trovata: !!c, dentro, punti: c ? c.punti.length : 0,
+                  allunga: c ? c.allunga : 0 });
+    }
+    report({ casi });
+  `);
+
+  for (const c of r.casi) {
+    assert.ok(c.trovata, `muro a ${c.cy}: la rotta attorno c'è, e va trovata`);
+    assert.equal(c.dentro, 0, `muro a ${c.cy}: nessun pezzo di rotta passa sulla terra`);
+    assert.ok(c.allunga > 1, `muro a ${c.cy}: girarlo allunga la strada`);
+  }
+});
+
+test("le traversate che tagliavano le penisole ora le girano", async () => {
+  const r = await runInGame(`
+    helpEl.classList.remove("on"); tut.on = false;
+    mapMode = "ionio"; newWorld("mantova");
+    const P = n => world.ports.find(o => o.n === n);
+    windBase = 8; windDirBase = 315 * D2R;
+    // sono le sei coppie che passavano sulla terra: la griglia le portava
+    // dritte attraverso un istmo più stretto della sua maglia
+    const out = {};
+    for (const [da, a] of [["Preveza","Palairos"], ["Nydri","Argostoli"],
+                           ["Sivota","Argostoli"], ["Spartochori","Argostoli"],
+                           ["Argostoli","Kalamos"], ["Argostoli","Mytikas"]]) {
+      const p1 = P(da), p2 = P(a);
+      const c = consigliaRotta(p1.x, p1.y, p2.x, p2.y);
+      let peggio = 1e9, px = p1.x, py = p1.y;
+      for (const q of c.punti) {
+        const n = Math.ceil(Math.hypot(q.x-px, q.y-py) / 25);
+        for (let i = 0; i <= n; i++) {
+          const t = i/n, x = px+(q.x-px)*t, y = py+(q.y-py)*t;
+          if (Math.hypot(x-p1.x, y-p1.y) < 300 || Math.hypot(x-p2.x, y-p2.y) < 300) continue;
+          peggio = Math.min(peggio, -landDepth(world.islands, x, y));
+        }
+        px = q.x; py = q.y;
+      }
+      out[da + " → " + a] = { peggio, punti: c.punti.length };
+    }
+    report(out);
+  `);
+
+  for (const [rotta, c] of Object.entries(r))
+    assert.ok(c.peggio > 90,
+      `${rotta}: la rotta resta al largo della costa (${c.peggio.toFixed(0)} m nel punto peggiore)`);
+});
+
 test("il bersaglio è il porto d'arrivo, poi l'incarico, poi la rotta, poi il cursore", async () => {
   const r = await runInGame(`
     ${MONDO}
