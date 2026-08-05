@@ -205,6 +205,7 @@
   <label>Mappa <select id="mapsel"><option value="ionio" selected>Mar Ionio</option><option value="rnd">Casuale</option></select></label>
   <label>Barca <select id="boatsel"></select></label>
   <label>Partenza <select id="port"></select></label>
+  <label>Arrivo <select id="dest"></select></label>
   <label>Seme <input id="seed" type="text" placeholder="a caso"></label>
   <label><input id="easy" type="checkbox" checked> Mare facile</label>
   <label>Passo rotelle <select id="wstep"><option value="1">1×</option><option value="0.5">1/2</option><option value="0.2" selected>1/5</option><option value="0.1">1/10</option></select></label>
@@ -214,6 +215,7 @@
   <button id="gen">Nuova mappa</button>
   <button id="reset">Riporta al via</button>
   <button id="chartb">Carta (C)</button>
+  <button id="consb">Rotta consigliata (U)</button>
   <button id="carb">Carriera (I)</button>
   <button id="logb">Giornale</button>
   <button id="helpb">Comandi</button>
@@ -224,6 +226,7 @@
   <div id="jaz">
     <button data-k="c" title="Carta nautica a tutto schermo (C)">Carta</button>
     <button data-k="v" title="Bordi: come arrivare al punto col vento che c'è, sulla carta (V)">Bordi</button>
+    <button data-k="u" title="Rotta consigliata fino al porto d'arrivo, col vento che c'è (U)">Rotta</button>
     <button data-k="z" title="Governo: richiamo al centro, rotta, vento, barra libera (Z)">Pilota</button>
     <button data-k="t" title="Regolazione automatica delle vele (T)">Auto</button>
     <button data-k=" " title="Barra al cavallino, autotimoniere disinserito (Spazio)">Barra</button>
@@ -368,6 +371,7 @@
       <tr><td>Click sulla carta</td><td><strong>Segna un punto di rotta</strong> · un click sopra un punto lo toglie</td></tr>
       <tr><td><kbd>Canc</kbd> (sulla carta)</td><td>Toglie l'ultimo punto · <kbd>Maiusc</kbd>+<kbd>Canc</kbd> cancella tutta la rotta</td></tr>
       <tr><td><kbd>V</kbd></td><td><strong>Bordi</strong> sulla carta: dove virare per arrivare al punto col vento che c'è, e in quanto</td></tr>
+      <tr><td><kbd>U</kbd></td><td><strong>Rotta consigliata</strong> fino al porto scelto in <em>Arrivo</em>: gira le terre, evita le ombre di vento, e diventa la rotta tracciata</td></tr>
       <tr><td><kbd>L</kbd></td><td>Giornale di bordo</td></tr>
       <tr><td><kbd>I</kbd></td><td>Carriera: incarichi, cantiere e salvataggio da portare altrove</td></tr>
       <tr><td><kbd>M</kbd></td><td>Nascondi / mostra il menù in alto</td></tr>
@@ -394,7 +398,7 @@
        fascia verde dove dovrebbe stare adesso, segno chiaro dove sta. Girano anche da sole,
        quando comanda la regolazione automatica (<kbd>T</kbd>) o quando cambia la vela.</p>
     <p>La fila di pulsanti sopra i pad è la tastiera che sul telefono non c'è:
-       <em>Carta</em> (<kbd>C</kbd>), <em>Bordi</em> (<kbd>V</kbd>), <em>Pilota</em> (<kbd>Z</kbd>), <em>Auto</em> (<kbd>T</kbd>),
+       <em>Carta</em> (<kbd>C</kbd>), <em>Bordi</em> (<kbd>V</kbd>), <em>Rotta</em> (<kbd>U</kbd>), <em>Pilota</em> (<kbd>Z</kbd>), <em>Auto</em> (<kbd>T</kbd>),
        <em>Barra</em> dritta (<kbd>Spazio</kbd>), <em>Collo</em> (<kbd>B</kbd>),
        <em>Terz.</em> (<kbd>X</kbd>), <em>Fiocco</em> (<kbd>F</kbd>), <em>Spi</em> (<kbd>G</kbd>).</p>
     <p>Su schermo stretto gli strumenti si stringono, la rosa dei venti rimpicciolisce e la
@@ -463,6 +467,11 @@
     <p>Gli angoli non sono un numero fisso: sono quelli di <em>massima VMG</em> — la velocità utile nella direzione dove vuoi andare — calcolati sul polare teorico di <strong>quella barca</strong> con <strong>quel vento</strong>, la stessa curva che vedi nel giornale. La barca da regata stringe più del gozzo, e con poco vento tutte poggiano: se cambi scafo o giri il cursore del vento, la spezzata cambia forma. Sono conti con randa e fiocco: lo spinnaker, in poppa, ti farà andare meglio di quanto scritto.</p>
     <p>Sottovento la linea diretta è una scelta e non un ripiego: si tiene benissimo, si va solo più piano. Lì il piano confronta i <em>tempi</em> e, se strambare non guadagna almeno l'1%, te lo dice e ti consiglia la diretta — in poppa piena, con randa e fiocco, quasi sempre è così. Al vento invece la diretta non è una rotta: sotto l'angolo di bolina le vele non tirano più, e i bordi sono l'unico modo di arrivarci.</p>
     <p>Come la rotta a matita, i bordi non governano niente: sono il compasso sulla carta, la barca la porti tu.</p>
+    <h2>Farsi consigliare la rotta</h2>
+    <p>I bordi rispondono per <em>una</em> tratta e a mare libero. Quando la domanda è più grande — «sono a Nydri, voglio andare a Fiskardo, il vento viene da nordovest: da che parte ci vado?» — scegli il porto in <strong>Arrivo</strong>, nel menù, e premi <kbd>U</kbd>. Ti viene tracciata una <strong>rotta consigliata</strong> a punti, che prende il posto della spezzata a matita e da lì in poi si comporta come lei: la correggi punto per punto, e <kbd>V</kbd> ti dice dove virare sulla tratta che stai facendo.</p>
+    <p>Il consiglio non guarda solo le miglia, guarda il <strong>tempo</strong>: la stessa distanza costa il doppio se va presa di bolina, e costa moltissimo dentro l'<strong>ombra di vento</strong> che ogni isola si porta sottovento. Per questo la rotta che esce spesso non è la più corta — passa al vento delle terre invece che sottovento, o allarga per andare a prendere il vento vero — e i punti che restano sono pochi, perché ognuno ha una ragione: o una terra da girare, o del vento da andare a prendere. In fondo alla riga verde, sulla carta, c'è la stima di quanto ci vorrà col vento di adesso.</p>
+    <p>Due cose da tenere a mente. La prima: il conto è fatto sul <strong>vento di questo momento</strong>, senza le raffiche — se il vento gira, il consiglio va richiesto di nuovo, e vedrai la rotta cambiare forma. La seconda: controvento, a mare libero, la rotta consigliata resta una <em>linea sola</em>, e non è una dimenticanza — i bordi su quella linea li chiedi a <kbd>V</kbd>, che sa dove cadono e li ricalcola mentre navighi. Sono due domande diverse: <em>da che parte passo</em> e <em>dove viro</em>.</p>
+    <p>Senza un porto scelto, il consiglio punta dove hai già segnato la rotta — l'ultimo punto — o dove tieni il cursore sulla carta. In carriera, con un carico a bordo, il porto di consegna vale come destinazione senza doverlo scegliere.</p>
     <h2>Le carte</h2>
     <p>Il menù in alto ha un elenco di <strong>porti di partenza</strong>: venti ancoraggi veri dell'arcipelago, da Preveza a Poros, passando per Fiskardo, Kioni, Vasiliki e Astakos. Sceglierne uno ti porta lì e azzera il cronometro.</p>
     <p>La mappa di serie è il <strong>Mar Ionio</strong>: Lefkada, Cefalonia, Itaca, Meganisi, Skorpios, Kalamos, Kastos e la costa della Grecia continentale, che sul bordo della carta è tagliata dritta perché la terra continua oltre. Le coste vengono da dati cartografici reali, quindi forme e posizioni relative sono quelle vere. Le distanze invece sono ridotte 1:6, altrimenti da Nydri a Vathy ci vorrebbe un'ora di navigazione.</p>

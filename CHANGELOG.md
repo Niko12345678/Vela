@@ -10,6 +10,50 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
 ## Non rilasciato
 
 ### Aggiunto
+- **La rotta consigliata: da che parte si va, col vento che c'è.** I bordi
+  rispondono per *una* tratta e a mare libero, ma la domanda di chi impara
+  a pianificare è più grande — «sono a Nydri, voglio andare a Fiskardo, il
+  vento viene da nordovest: da che parte ci vado?» — e finora la risposta
+  era guardare la carta e tirare a indovinare. Ora si sceglie il porto in
+  **Arrivo**, nel menù, e `U` traccia una rotta a punti che prende il posto
+  della spezzata a matita: da lì si comporta come lei, si corregge punto
+  per punto, e `V` continua a dire dove virare sulla tratta in corso. Sono
+  due domande diverse e restano due comandi: *da che parte passo* e *dove
+  viro*.
+  Il conto è un Dijkstra su una griglia di nodi in mare dove il costo di un
+  lato non è la lunghezza ma il **tempo**: la stessa distanza costa il
+  doppio presa di bolina e costa moltissimo dentro l'ombra di vento di
+  un'isola. È da lì che escono le rotte che un marinaio riconosce — passare
+  al vento della terra e non sottovento, allargare per andare a prendere il
+  vento vero — senza che nessuna di quelle regole sia scritta nel codice.
+  Il tempo di una tratta è lo stesso che calcolano i bordi: sotto l'angolo
+  di bolina è la VMG diviso il coseno, cioè lo stesso parallelogramma, e un
+  collaudo lo verifica angolo per angolo. Per questo a mare libero, anche
+  controvento, il consiglio resta **una linea sola**: gli zigzag non sono
+  punti di rotta, e chiederli è il mestiere di `V`.
+  Tre scelte che non sono grafica. Si pianifica sul **vento medio**, con le
+  raffiche spente per la durata del conto: una rotta pensata sulle raffiche
+  di questo secondo sarebbe sbagliata il secondo dopo, mentre le ombre
+  stanno ferme finché sta ferma la direzione del vento — se il vento gira,
+  il consiglio si richiede. I punti che restano sono **pochi**: si uniscono
+  due tratte in una ogni volta che la linea dritta è libera e non costa di
+  più, quindi un punto che sopravvive ha una ragione, o una terra da girare
+  o del vento da andare a prendere. E il vento si arrotonda al metro al
+  secondo, perché ogni valore nuovo costa una ricerca di VMG, cioè settanta
+  equilibri velici: il primo consiglio riempie quelle tabelle e ci mette
+  mezzo secondo a carta ferma, i successivi sono immediati.
+  Senza un porto scelto il bersaglio è, in ordine, quello dell'incarico che
+  si ha a bordo, l'ultimo punto della rotta già tracciata, il cursore sulla
+  carta. Come tutto il resto del tavolo da carteggio, non governa niente.
+- `test/consiglio.test.js`: il tempo della griglia confrontato con quello
+  dei bordi su tre venti e otto angoli, il mare libero che non produce
+  punti inutili nemmeno in bolina, l'isola che si gira restando al largo
+  della costa e la rotta che torna dritta quando la si toglie, il buco di
+  vento senza terra attorno che fa deviare la rotta e le fa guadagnare
+  tempo, l'ordine dei bersagli, la rotta che finisce in `piano` senza
+  muovere la barca e smette di essere "consigliata" appena la si tocca, e
+  cinque traversate vere del Ionio che passano in acqua e si calcolano in
+  fretta.
 - **I bordi: dove virare per arrivare dove vuoi andare col vento che c'è.**
   La carta diceva già rilevamento e distanza di ogni tratta, ma erano i due
   numeri di una linea che spesso la barca *non può tenere*: se il punto sta

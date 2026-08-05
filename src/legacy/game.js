@@ -695,6 +695,7 @@ function comando(k,shift){
          say(piano.pts.length?"Ultimo punto tolto — ne restano "+piano.pts.length:"Rotta cancellata");}
   }
   if(k==="v")toggleBordi();
+  if(k==="u")consiglioApplica();
   if(k==="h")toggleHelp();
   if(k==="r")askConfirm("Riportare la barca al via? La regata in corso e il cronometro ripartono da zero.",resetBoat);
   if(k==="z")cyclePilot();
@@ -2002,6 +2003,11 @@ function drawHUD(){
 /* ══════════════════ interfaccia ══════════════════ */
 /* Porto di partenza: la carta ne offre una ventina, tutti ancoraggi veri. */
 const portEl=document.getElementById("port");
+/* Il porto d'ARRIVO non fa partire niente: dice soltanto dove si vuole
+   andare, ed è la domanda a cui risponde il consiglio di rotta (U). Sta
+   accanto alla partenza perché è lì che si guarda quando si pianifica una
+   traversata, prima di toccare la barra. */
+const destEl=document.getElementById("dest");
 function fillPorts(){
   const ps=world.ports||[];
   portEl.innerHTML="";
@@ -2011,7 +2017,26 @@ function fillPorts(){
     if(Math.abs(o.x-world.start.x)<2&&Math.abs(o.y-world.start.y)<2)op.selected=true;
     portEl.appendChild(op);
   });
+  // altra carta, altri porti: la destinazione scelta prima non esiste più
+  destPorto=null;
+  if(destEl){
+    destEl.innerHTML="";
+    const vuoto=document.createElement("option");
+    vuoto.value="";vuoto.textContent="— dove sono —";vuoto.selected=true;
+    destEl.appendChild(vuoto);
+    ps.forEach(o=>{
+      if(o.n==="Mare aperto")return;
+      const op=document.createElement("option");
+      op.value=o.n;op.textContent=o.n;
+      destEl.appendChild(op);
+    });
+  }
 }
+if(destEl)destEl.onchange=e=>{
+  destPorto=e.target.value||null;e.target.blur();
+  if(destPorto)say("Arrivo a "+destPorto+" — premi U per la rotta consigliata col vento che c'è");
+  else say("Nessun porto d'arrivo: il consiglio segue la rotta tracciata, o il cursore sulla carta");
+};
 function startFrom(i){
   const o=(world.ports||[])[i]; if(!o)return;
   world.start={x:o.x,y:o.y};
@@ -2114,6 +2139,10 @@ function toggleMenu(){
 document.getElementById("hidem").onclick=e=>{e.currentTarget.blur();toggleMenu();};
 // la carta a tutto schermo dal menù: su un telefono non c'è nessun C da premere
 document.getElementById("chartb").onclick=e=>{e.currentTarget.blur();toggleChart();};
+// il consiglio di rotta si chiede anche dal menù: apre la carta, perché è
+// lì che la rotta consigliata si legge e si corregge
+document.getElementById("consb").onclick=e=>{e.currentTarget.blur();
+  if(consiglioApplica()&&!chart.on)toggleChart();};
 showEl.onclick=toggleMenu;
 document.getElementById("closehelp").onclick=toggleHelp;
 helpEl.addEventListener("pointerdown",e=>{if(e.target===helpEl)toggleHelp();});
@@ -2554,6 +2583,353 @@ function drawBordiPannello(bp,S){
   scrivi(righe,VW-16,fondo);
 }
 
+/* ══════════════════ consiglio di rotta ══════════════════ */
+/* «Voglio andare a Fiskardo: da che parte ci vado?» I bordi rispondono per
+   UNA tratta e a mare libero. Qui si risponde per l'intera traversata, con
+   le terre in mezzo e con l'ombra di vento che ogni isola si porta
+   sottovento. Il risultato è una rotta a punti — la stessa spezzata che si
+   traccia a matita — che finisce dentro `piano`: da lì la disegna la
+   carta, la segue lo scarto, e V dice dove virare sulla tratta in corso.
+   Non governa niente nemmeno questo: è un consiglio, si può cambiare punto
+   per punto, e la barca continua a doverla portare qualcuno.
+
+   Il conto è un Dijkstra su una griglia di nodi in mare, dove il costo di
+   un lato non è la sua lunghezza ma il TEMPO che ci vuole a percorrerlo:
+   la stessa distanza costa il doppio se va presa di bolina, e costa
+   moltissimo dentro l'ombra di un'isola, dove il vento non c'è. È questo
+   che fa uscire dal conto le rotte che un marinaio riconosce — passare al
+   vento dell'isola e non sottovento, allargare per andare a prendere il
+   vento vero — senza che nessuna di quelle regole sia scritta qui dentro.
+
+   Tre scelte che vale la pena sapere:
+
+   - **Il vento è quello di adesso, senza raffiche.** Una rotta pensata
+     sulle raffiche di questo secondo sarebbe sbagliata il secondo dopo: le
+     raffiche si spengono per la durata del conto e si pianifica sul vento
+     medio, ombre comprese, che invece stanno ferme finché sta ferma la
+     direzione del vento. Quando il vento gira, il consiglio si richiede.
+   - **Il costo di una tratta tiene già conto dei bordi.** Sotto l'angolo
+     di bolina la velocità utile è la VMG diviso il coseno: è esattamente
+     il tempo che `bordiPer` calcola per la stessa tratta — stesso
+     parallelogramma — e un collaudo lo verifica. La griglia non ha quindi
+     bisogno di disegnare gli zigzag per pagarli, e infatti non li disegna:
+     a mare libero, controvento, il consiglio resta una linea sola e i
+     bordi li chiedi a V. Sono due domande diverse.
+   - **I punti che restano sono pochi.** Dalla griglia esce una scaletta di
+     nodi; si tengono solo quelli che servono, unendo due tratte in una
+     ogni volta che la linea dritta è libera e non costa più di una briciola
+     in più. Un punto che sopravvive è un punto con una ragione: o una terra
+     da girare, o del vento da andare a prendere. `CONS_PUNTI` è un
+     obiettivo e non un tetto — si prova a unire con tolleranze via via più
+     larghe finché i punti non scendono lì sotto, ma un giro largo attorno a
+     Cefalonia di punti ne chiede una dozzina e nessuna tolleranza glieli
+     toglie: quelli sono terra, non pignoleria.                          */
+const CONS_ACQUA=110;        // margine dalla costa sotto cui un nodo non è navigabile
+const CONS_LATO=52;          // nodi per lato della griglia: è lui a fissare il costo del conto
+const CONS_MARGINI=[0.28,0.7,1.5];  // quanto il riquadro si allarga oltre la congiungente
+const CONS_PUNTI=8;          // punti di rotta a cui puntare: oltre, si unisce con più larghezza
+const CONS_TOLL=[1.02,1.06,1.14,1.3];  // tolleranze crescenti per unire due tratte in una
+const CONS_VICINI=[[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1],
+                   [1,2],[2,1],[2,-1],[1,-2],[-1,-2],[-2,-1],[-2,1],[-1,2]];
+
+/* Quanto rende davvero una direzione: la velocità con cui ci si avvicina
+   al punto, bordi compresi. Sotto l'angolo di bolina la linea non si tiene
+   e quel che conta è la VMG diviso il coseno; sottovento la diretta si
+   tiene sempre, e vale la migliore fra lei e lo zigzag. Fuori da quei due
+   settori è il polare e basta.                                          */
+function velocitaUtile(twa,spd){
+  if(!(spd>0.2))return 0;
+  // il vento si arrotonda al metro al secondo: una griglia intera chiede
+  // decine di migliaia di velocità e ogni valore nuovo di vento costa una
+  // ricerca di VMG, cioè settanta equilibri velici. Mezzo nodo di
+  // risoluzione in più non sposta una rotta, quel conto sì
+  spd=Math.max(1,Math.round(spd));
+  const at=Math.abs(norm(twa)), A=andature(spd);
+  if(at<A.bolina.twa) return A.bolina.vmg/Math.max(Math.cos(at),1e-6);
+  const v=polarMemo1(at*R2D,spd);
+  if(at>A.poppa.twa) return Math.max(v,A.poppa.vmg/Math.max(-Math.cos(at),1e-6));
+  return v;
+}
+/* Il tempo di una tratta dritta, col vento letto a metà. Le tratte lunghe
+   si spezzano: un solo campione a metà di sei miglia direbbe che l'ombra
+   di un'isola non c'è, ed è proprio l'ombra che si sta cercando di
+   evitare.                                                              */
+function consTempo(ax,ay,bx,by,passo){
+  const dx=bx-ax, dy=by-ay, d=Math.hypot(dx,dy);
+  if(!(d>0))return 0;
+  const ril=angOf(dx,dy), n=Math.max(1,Math.ceil(d/(passo||600)));
+  let t=0;
+  for(let i=0;i<n;i++){
+    const f=(i+0.5)/n;
+    const w=windAt(ax+dx*f,ay+dy*f);
+    const v=velocitaUtile(norm(w.from-ril),w.spd);
+    t+=v>0.05?(d/n)/v:1e7;
+  }
+  return t;
+}
+/* Coda a priorità minima: un mucchio binario su due array paralleli.
+   Serve solo qui, e serve che non allochi un oggetto per nodo. */
+function consCoda(){
+  const v=[],p=[];
+  return {n:0,
+    push(x,pr){
+      let i=this.n++; v[i]=x;p[i]=pr;
+      while(i>0){const q=(i-1)>>1; if(p[q]<=p[i])break;
+        const a=v[i];v[i]=v[q];v[q]=a; const b=p[i];p[i]=p[q];p[q]=b; i=q;}
+    },
+    pop(){
+      const top=v[0], i=--this.n;
+      v[0]=v[i];p[0]=p[i];
+      let j=0;
+      for(;;){
+        const a=2*j+1, b=a+1; let m=j;
+        if(a<this.n&&p[a]<p[m])m=a;
+        if(b<this.n&&p[b]<p[m])m=b;
+        if(m===j)break;
+        const x=v[j];v[j]=v[m];v[m]=x; const y=p[j];p[j]=p[m];p[m]=y; j=m;
+      }
+      return top;
+    }};
+}
+/* La griglia: un riquadro attorno alla congiungente, con un nodo ogni
+   `passo` metri e una bandierina per dire se lì c'è acqua. Il lato è
+   fisso, quindi una traversata lunga si pianifica con maglie larghe e una
+   corta con maglie fitte: il conto costa sempre uguale.                 */
+function consGriglia(ax,ay,bx,by,marg){
+  const m=Math.max(marg*Math.hypot(bx-ax,by-ay),700);
+  const x0=Math.min(ax,bx)-m, y0=Math.min(ay,by)-m;
+  const lx=Math.abs(bx-ax)+2*m, ly=Math.abs(by-ay)+2*m;
+  const passo=Math.max(70,Math.max(lx,ly)/(CONS_LATO-1));
+  const nx=Math.floor(lx/passo)+1, ny=Math.floor(ly/passo)+1;
+  const isl=(world&&world.islands)||[];
+  const nav=new Uint8Array(nx*ny);
+  for(let j=0;j<ny;j++)for(let i=0;i<nx;i++)
+    nav[j*nx+i]=landDepth(isl,x0+i*passo,y0+j*passo)<-CONS_ACQUA?1:0;
+  return {x0,y0,nx,ny,passo,nav,
+          wx:i=>x0+i*passo, wy:j=>y0+j*passo};
+}
+/* Un salto è buono solo se sono in acqua anche le celle che attraversa: se
+   no si passa in diagonale fra due scogli che si toccano. */
+function consSalto(G,i0,j0,i1,j1){
+  const n=Math.max(2,Math.ceil(Math.hypot(i1-i0,j1-j0)*2));
+  for(let k=0;k<=n;k++){
+    const t=k/n;
+    const i=Math.round(i0+(i1-i0)*t), j=Math.round(j0+(j1-j0)*t);
+    if(!G.nav[j*G.nx+i])return false;
+  }
+  return true;
+}
+/* Il nodo navigabile più vicino a un punto, cercato a spirale: un porto
+   vero sta a riva, quindi il nodo sopra il porto è quasi sempre "terra" e
+   quello buono è il primo un po' più al largo. */
+function consNodo(G,x,y){
+  const ci=clamp(Math.round((x-G.x0)/G.passo),0,G.nx-1);
+  const cj=clamp(Math.round((y-G.y0)/G.passo),0,G.ny-1);
+  for(let r=0;r<=8;r++){
+    let best=-1,bd=1e18;
+    for(let j=Math.max(0,cj-r);j<=Math.min(G.ny-1,cj+r);j++)
+      for(let i=Math.max(0,ci-r);i<=Math.min(G.nx-1,ci+r);i++){
+        if(Math.max(Math.abs(i-ci),Math.abs(j-cj))!==r)continue;
+        if(!G.nav[j*G.nx+i])continue;
+        const d=Math.hypot(G.wx(i)-x,G.wy(j)-y);
+        if(d<bd){bd=d;best=j*G.nx+i;}
+      }
+    if(best>=0)return best;
+  }
+  return -1;
+}
+function consDijkstra(G,s,g){
+  const N=G.nx*G.ny;
+  const costo=new Float64Array(N).fill(Infinity), prima=new Int32Array(N).fill(-1);
+  const chiuso=new Uint8Array(N), q=consCoda();
+  costo[s]=0; q.push(s,0);
+  while(q.n){
+    const u=q.pop();
+    if(chiuso[u])continue;
+    chiuso[u]=1;
+    if(u===g)break;
+    const ui=u%G.nx, uj=(u-ui)/G.nx, ux=G.wx(ui), uy=G.wy(uj);
+    for(const v of CONS_VICINI){
+      const vi=ui+v[0], vj=uj+v[1];
+      if(vi<0||vj<0||vi>=G.nx||vj>=G.ny)continue;
+      const w=vj*G.nx+vi;
+      if(chiuso[w]||!G.nav[w])continue;
+      if(!consSalto(G,ui,uj,vi,vj))continue;
+      const c=costo[u]+consTempo(ux,uy,G.wx(vi),G.wy(vj),G.passo);
+      if(c<costo[w]){costo[w]=c;prima[w]=u;q.push(w,c);}
+    }
+  }
+  if(!isFinite(costo[g]))return null;
+  const cam=[];
+  for(let u=g;u>=0;u=prima[u])cam.push(u);
+  return {cam:cam.reverse(),t:costo[g]};
+}
+/* Mare libero fra due punti, con lo stesso metro dei nodi. Vicino ai due
+   capi si chiude un occhio: il porto di partenza e quello d'arrivo sono a
+   riva per definizione, e nessuna rotta li raggiungerebbe mai. */
+function consMareLibero(a,b,capoA,capoB){
+  const isl=(world&&world.islands)||[];
+  if(!isl.length)return true;
+  const d=Math.hypot(b.x-a.x,b.y-a.y), n=Math.max(2,Math.ceil(d/90));
+  const salta=CONS_ACQUA*2;
+  for(let i=0;i<=n;i++){
+    const t=i/n;
+    if((capoA&&t*d<salta)||(capoB&&(1-t)*d<salta))continue;
+    if(landDepth(isl,a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t)>-CONS_ACQUA)return false;
+  }
+  return true;
+}
+/* Da scaletta di nodi a punti di rotta: si tira la linea più lunga
+   possibile, e la si accetta se è in acqua e non costa più di `toll`
+   rispetto a passare per tutti i nodi in mezzo. Il secondo controllo è
+   quello che salva le deviazioni fatte per il vento: aggirare un'ombra
+   costa meno che attraversarla, quindi quella spezzata non si lascia
+   raddrizzare. `CONS_SGUARDO` limita quanto avanti si guarda — senza, su
+   una rotta lunga il conto diventa quadratico. */
+const CONS_SGUARDO=30;
+function consUnisci(pts,pre,passo,toll){
+  const out=[0];
+  let i=0;
+  while(i<pts.length-1){
+    let j=Math.min(pts.length-1,i+CONS_SGUARDO);
+    for(;j>i+1;j--){
+      if(!consMareLibero(pts[i],pts[j],i===0,j===pts.length-1))continue;
+      if(consTempo(pts[i].x,pts[i].y,pts[j].x,pts[j].y,passo)<=(pre[j]-pre[i])*toll)break;
+    }
+    out.push(j); i=j;
+  }
+  return out;
+}
+/* Si passa e ripassa finché non c'è più niente da unire: una traversata
+   lunga esce dalla griglia come cinquanta nodi e `CONS_SGUARDO` ne guarda
+   trenta per volta, quindi il primo giro lascia comunque una giuntura in
+   mezzo al mare aperto. Al secondo giro sparisce. */
+function consScaletta(pts,passo,toll){
+  let cur=pts;
+  for(let giro=0;giro<5&&cur.length>2;giro++){
+    const pre=[0];
+    for(let i=1;i<cur.length;i++)
+      pre.push(pre[i-1]+consTempo(cur[i-1].x,cur[i-1].y,cur[i].x,cur[i].y,passo));
+    const idx=consUnisci(cur,pre,passo,toll);
+    if(idx.length===cur.length)break;
+    cur=idx.map(k=>cur[k]);
+  }
+  return cur;
+}
+/* Il piano completo da A a B. Torna null se non trova acqua per arrivarci
+   nemmeno allargando il riquadro: succede coi punti a terra, ed è giusto
+   che lo dica invece di inventare una rotta. */
+function consigliaRotta(ax,ay,bx,by){
+  if(!(Math.hypot(bx-ax,by-ay)>1))return null;
+  shadeDir=dv(windDirBase+Math.PI);     // l'ombra guarda dove soffia, anche a tempo fermo
+  const raffiche=gusts; gusts=[];       // si pianifica sul vento medio: le raffiche non aspettano
+  try{
+    for(const marg of CONS_MARGINI){
+      const G=consGriglia(ax,ay,bx,by,marg);
+      const s=consNodo(G,ax,ay), g=consNodo(G,bx,by);
+      if(s<0||g<0)continue;
+      const r=consDijkstra(G,s,g);
+      if(!r)continue;
+      return consRifinisci(G,r,ax,ay,bx,by);
+    }
+    return null;
+  }finally{ gusts=raffiche; }
+}
+function consRifinisci(G,r,ax,ay,bx,by){
+  // i nodi troppo vicini ai due capi non dicono niente e sposterebbero
+  // solo il primo e l'ultimo punto della rotta di mezza maglia
+  const vicino=G.passo*0.9;
+  const pts=[{x:ax,y:ay}];
+  for(const u of r.cam){
+    const i=u%G.nx, p={x:G.wx(i),y:G.wy((u-i)/G.nx)};
+    if(Math.hypot(p.x-ax,p.y-ay)<vicino||Math.hypot(p.x-bx,p.y-by)<vicino)continue;
+    pts.push(p);
+  }
+  pts.push({x:bx,y:by});
+  let corta=null;
+  for(const toll of CONS_TOLL){
+    corta=consScaletta(pts,G.passo,toll);
+    if(corta.length-1<=CONS_PUNTI)break;
+  }
+  const punti=corta.slice(1).map(p=>({x:Math.round(p.x),y:Math.round(p.y)}));
+  const w0=windAt(ax,ay);
+  const out={da:{x:ax,y:ay},a:{x:bx,y:by},punti,tratte:[],t:0,totale:0,
+             dist:Math.hypot(bx-ax,by-ay),passo:G.passo,vento:{da:w0.from,spd:w0.spd}};
+  let px=ax,py=ay;
+  for(const p of punti){
+    const w=windAt((px+p.x)/2,(py+p.y)/2);
+    const b=bordiPer(px,py,p.x,p.y,w.from,w.spd);
+    const t=consTempo(px,py,p.x,p.y,G.passo);
+    const d=Math.hypot(p.x-px,p.y-py);
+    out.tratte.push({da:{x:px,y:py},a:{x:p.x,y:p.y},dist:d,t,
+                     ril:angOf(p.x-px,p.y-py),
+                     tipo:b?b.tipo:"diretta",twa:b?b.twa:0,vento:{da:w.from,spd:w.spd}});
+    out.t+=t; out.totale+=d;
+    px=p.x;py=p.y;
+  }
+  out.allunga=out.dist>0?out.totale/out.dist:1;
+  // il tempo della linea dritta, per dire cosa è costata la deviazione
+  out.tDiretta=consTempo(ax,ay,bx,by,G.passo);
+  out.diretta=consMareLibero({x:ax,y:ay},{x:bx,y:by},true,true);
+  return out;
+}
+
+/* Dove si vuole arrivare, in ordine di quanto è esplicita la richiesta: il
+   porto scelto nel menù, il porto dell'incarico che si ha a bordo, la fine
+   della rotta già tracciata, il cursore sulla carta. */
+let destPorto=null;          // nome del porto d'arrivo scelto nel menù
+let consiglio=null;          // l'ultimo piano calcolato: lo legge la carta
+function consiglioBersaglio(){
+  if(destPorto){
+    const o=(world.ports||[]).find(q=>q.n===destPorto);
+    if(o)return {x:o.x,y:o.y,nome:o.n,fonte:"menu"};
+  }
+  if(CARRIERA.attiva&&CARRIERA.incarico){
+    const o=(world.ports||[]).find(q=>q.n===CARRIERA.incarico.a);
+    if(o)return {x:o.x,y:o.y,nome:o.n,fonte:"incarico"};
+  }
+  const u=piano.pts[piano.pts.length-1];
+  if(u)return {x:u.x,y:u.y,nome:null,fonte:"punto"};
+  if(chart.on&&chart.mx>0){
+    const q=c2w(chart.mx,chart.my);
+    return {x:q.x,y:q.y,nome:null,fonte:"cursore"};
+  }
+  return null;
+}
+/* La rotta consigliata prende il posto di quella a matita: è la stessa
+   spezzata, e tenerne due sulla carta vorrebbe dire non sapere più quale
+   si sta seguendo. Chi ne aveva una tracciata se lo sente dire. */
+function consiglioApplica(){
+  const b=consiglioBersaglio();
+  if(!b){say("Scegli il porto d'arrivo nel menù, o segna dove vuoi andare sulla carta (C)");return null;}
+  const c=consigliaRotta(boat.x,boat.y,b.x,b.y);
+  if(!c){say("Non trovo acqua per arrivare "+(b.nome?"a "+b.nome:"lì")+": è terra, o è chiuso");return null;}
+  c.bersaglio=b;
+  const cera=piano.pts.length;
+  piano.pts.length=0;
+  for(const p of c.punti)piano.pts.push({x:p.x,y:p.y});
+  piano.i=0;piano.da={x:boat.x,y:boat.y};
+  consiglio=c;
+  // le tratte da fare di bolina si dicono subito: sono quelle che la barca
+  // non può tenere in linea, e sono il motivo per cui esiste anche V
+  const bol=c.tratte.filter(t=>t.tipo==="bolina").length;
+  say("Rotta consigliata"+(b.nome?" per "+b.nome:"")+": "+c.punti.length+
+      (c.punti.length===1?" punto · ":" punti · ")+nm(c.totale).toFixed(2)+" nm · "+
+      realT(c.t)+" col vento di adesso"+
+      (bol?" · "+bol+(bol===1?" tratta di bolina: lì si bordeggia (V)":" tratte di bolina: lì si bordeggia (V)"):"")+
+      (cera?" (sostituisce la rotta tracciata)":""));
+  return c;
+}
+/* Il consiglio vale finché è ancora lui la rotta sulla carta: togli o
+   sposta un punto e torna una rotta a matita come le altre, senza numeri
+   che parlano di una spezzata che non c'è più. */
+function consiglioVivo(){
+  if(!consiglio||consiglio.punti.length!==piano.pts.length)return null;
+  for(let i=0;i<piano.pts.length;i++)
+    if(piano.pts[i].x!==consiglio.punti[i].x||piano.pts[i].y!==consiglio.punti[i].y)return null;
+  return consiglio;
+}
+
 /* ══════════════════ carta nautica ══════════════════ */
 /* Vista a tutto schermo con l'aspetto di una carta di navigazione: carta
    chiara, terre color sabbia, secche azzurre, reticolato in gradi veri.  */
@@ -2802,8 +3178,19 @@ function drawChart(){
   ctx.fillText(stretto
     ? "SCALA 1:"+SCALE_GEO+"  ·  TRASCINA  ·  PIZZICA PER INGRANDIRE  ·  CARTA CHIUDE"
     : "SCALA DI GIOCO 1:"+SCALE_GEO+"  ·  TRASCINA PER SPOSTARE  ·  ROTELLA PER INGRANDIRE  ·  C CHIUDE  ·  0 INQUADRA TUTTO",24,46);
-  // la riga della rotta: come si traccia, e quanto è lunga quella che c'è
-  if(piano.pts.length){
+  // la riga della rotta: come si traccia, e quanto è lunga quella che c'è.
+  // Se la spezzata è quella consigliata lo dice, con la stima di quanto ci
+  // vuole: è il numero per cui si è chiesto il consiglio
+  const cons=consiglioVivo();
+  if(cons){
+    ctx.fillStyle="#1e6e46";
+    const dove=cons.bersaglio&&cons.bersaglio.nome?" PER "+cons.bersaglio.nome.toUpperCase():"";
+    ctx.fillText(stretto
+      ? "CONSIGLIATA"+dove+" · "+pianoResta().toFixed(2)+" nm · "+realT(cons.t).toUpperCase()
+      : "ROTTA CONSIGLIATA"+dove+" · "+cons.punti.length+(cons.punti.length===1?" PUNTO":" PUNTI")+
+        " · "+pianoResta().toFixed(2)+" nm DA QUI  ·  "+realT(cons.t).toUpperCase()+
+        " COL VENTO DI ADESSO  ·  U LA RIFÀ  ·  CANC L'ULTIMO PUNTO",24,60);
+  }else if(piano.pts.length){
     ctx.fillStyle="#1e6e46";
     ctx.fillText(stretto
       ? "ROTTA · "+piano.pts.length+" · "+pianoResta().toFixed(2)+" nm DA QUI  ·  TOCCA UN PUNTO PER TOGLIERLO"
@@ -2811,8 +3198,8 @@ function drawChart(){
         " · "+pianoResta().toFixed(2)+" nm DA QUI  ·  CLICCA SU UN PUNTO PER TOGLIERLO  ·  CANC L'ULTIMO  ·  MAIUSC+CANC TUTTA",24,60);
   }else{
     ctx.fillText(stretto
-      ? "TOCCA IL MARE PER SEGNARE UN PUNTO DI ROTTA"
-      : "CLICCA SUL MARE PER SEGNARE UN PUNTO DI ROTTA: LA LINEA RESTA TRATTEGGIATA ANCHE IN NAVIGAZIONE",24,60);
+      ? "TOCCA IL MARE PER SEGNARE UN PUNTO DI ROTTA  ·  U LA CONSIGLIA"
+      : "CLICCA SUL MARE PER SEGNARE UN PUNTO DI ROTTA: LA LINEA RESTA TRATTEGGIATA ANCHE IN NAVIGAZIONE  ·  U LA CONSIGLIA COL VENTO CHE C'È",24,60);
   }
   // la riga dei bordi: dove si accendono, e cosa stanno guardando
   ctx.fillStyle=bordiOn?"#8c2570":CHART.dim;
