@@ -1,15 +1,16 @@
 # `game.js` — il gioco ancora in un pezzo solo
 
-~2100 righe, sezioni separate da righe `══════`, nell'ordine: utilità →
+~3700 righe, sezioni separate da righe `══════`, nell'ordine: utilità →
 costanti `K` → mondo (`mkIsland`, `landDepth`, `buildShade`, `genWorld`) →
 stato (`boat`, `game`, vento) → fisica
 (`sailAero`, `aeroC`, `bestTrim`, `polarSpeed`, `trimWindows`, `physics`,
 `autopilot`) → tratteggi del vento → input → disegno → strumenti →
-interfaccia → rotta pianificata → carta nautica → giornale di bordo →
+interfaccia → rotta pianificata → pianificazione dei bordi → carta
+nautica → giornale di bordo →
 carriera → salvataggio portatile → interfaccia della carriera →
 tutorial → ciclo.
 
-Quattro cose da sapere prima di toccarlo:
+Cinque cose da sapere prima di toccarlo:
 
 - **`frame(now)`**, in fondo al file, è l'unico punto in cui il tempo
   avanza. `dt` è ritagliato in `[0, 0.05]` (il commento sul negativo è la
@@ -22,6 +23,12 @@ Quattro cose da sapere prima di toccarlo:
 - **`windAt(x,y)`** è chiamata centinaia di migliaia di volte per
   fotogramma fra fisica e tratteggi, e un test ne misura il costo (< 900 ms
   per 200 k campioni). Non metterci dentro allocazioni.
+- **`polarSpeed` costa ~0,8 ms a chiamata** — risolve un equilibrio con
+  cinquanta iterazioni — e la pianificazione dei bordi ne chiede una
+  settantina per trovare gli angoli di massima VMG. Va sempre attraverso
+  `polarMemo1` / `andature`, che tengono i risultati per barca e vento
+  arrotondato: chiamarla dritta dentro il disegno vuol dire un fotogramma
+  da mezzo secondo.
 - **Il salvataggio è a strati** (`store`): archivio degli artefatti se
   esiste, altrimenti `localStorage`, altrimenti memoria di sessione.
   Nessuno dei tre è garantito: non dare per scontato che `LOG` o `CARRIERA`

@@ -157,7 +157,7 @@
   .jax{position:absolute;font-size:8px;letter-spacing:.12em;
     color:rgba(243,234,212,.5);pointer-events:none;white-space:nowrap}
   .jax-y{top:6px} .jax-x{bottom:5px}
-  #jaz{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;
+  #jaz{display:grid;grid-template-columns:repeat(9,1fr);gap:4px;
     width:100%;max-width:660px;margin:0 auto}
   #jaz button{font-size:9px;padding:6px 1px;letter-spacing:.02em;
     background:rgba(8,32,46,.72);white-space:nowrap;overflow:hidden}
@@ -223,6 +223,7 @@
 <div id="joy">
   <div id="jaz">
     <button data-k="c" title="Carta nautica a tutto schermo (C)">Carta</button>
+    <button data-k="v" title="Bordi: come arrivare al punto col vento che c'è, sulla carta (V)">Bordi</button>
     <button data-k="z" title="Governo: richiamo al centro, rotta, vento, barra libera (Z)">Pilota</button>
     <button data-k="t" title="Regolazione automatica delle vele (T)">Auto</button>
     <button data-k=" " title="Barra al cavallino, autotimoniere disinserito (Spazio)">Barra</button>
@@ -366,6 +367,7 @@
       <tr><td><kbd>C</kbd></td><td>Carta nautica a tutto schermo</td></tr>
       <tr><td>Click sulla carta</td><td><strong>Segna un punto di rotta</strong> · un click sopra un punto lo toglie</td></tr>
       <tr><td><kbd>Canc</kbd> (sulla carta)</td><td>Toglie l'ultimo punto · <kbd>Maiusc</kbd>+<kbd>Canc</kbd> cancella tutta la rotta</td></tr>
+      <tr><td><kbd>V</kbd></td><td><strong>Bordi</strong> sulla carta: dove virare per arrivare al punto col vento che c'è, e in quanto</td></tr>
       <tr><td><kbd>L</kbd></td><td>Giornale di bordo</td></tr>
       <tr><td><kbd>I</kbd></td><td>Carriera: incarichi, cantiere e salvataggio da portare altrove</td></tr>
       <tr><td><kbd>M</kbd></td><td>Nascondi / mostra il menù in alto</td></tr>
@@ -392,7 +394,7 @@
        fascia verde dove dovrebbe stare adesso, segno chiaro dove sta. Girano anche da sole,
        quando comanda la regolazione automatica (<kbd>T</kbd>) o quando cambia la vela.</p>
     <p>La fila di pulsanti sopra i pad è la tastiera che sul telefono non c'è:
-       <em>Carta</em> (<kbd>C</kbd>), <em>Pilota</em> (<kbd>Z</kbd>), <em>Auto</em> (<kbd>T</kbd>),
+       <em>Carta</em> (<kbd>C</kbd>), <em>Bordi</em> (<kbd>V</kbd>), <em>Pilota</em> (<kbd>Z</kbd>), <em>Auto</em> (<kbd>T</kbd>),
        <em>Barra</em> dritta (<kbd>Spazio</kbd>), <em>Collo</em> (<kbd>B</kbd>),
        <em>Terz.</em> (<kbd>X</kbd>), <em>Fiocco</em> (<kbd>F</kbd>), <em>Spi</em> (<kbd>G</kbd>).</p>
     <p>Su schermo stretto gli strumenti si stringono, la rosa dei venti rimpicciolisce e la
@@ -455,6 +457,12 @@
     <p>Sulla carta, <strong>ogni click sul mare segna un punto di rotta</strong>: i punti si uniscono in una spezzata numerata, e accanto a ogni tratta trovi <strong>rilevamento e distanza in miglia</strong>, gli stessi due numeri che si scrivono a matita sulla carta di carta. Un click sopra un punto lo toglie, <kbd>Canc</kbd> toglie l'ultimo, <kbd>Maiusc</kbd>+<kbd>Canc</kbd> cancella tutto. Trascinare sposta la carta come prima: il click conta solo se lasci il tasto dove l'hai premuto.</p>
     <p>Chiusa la carta la rotta <strong>resta tratteggiata sul mare</strong>, davanti alla prua: la tratta che stai facendo è piena, quelle già fatte restano spente, e attorno al punto verso cui vai c'è il cerchio entro il quale conta per passato. Il pannello <em>ROTTA</em> in plancia dice a che punto sei, il <strong>rilevamento e la distanza</strong> del prossimo e soprattutto lo <strong>scarto</strong>: di quanti metri sei fuori dalla linea, e da che parte. Puntare al punto e seguire la linea non sono la stessa cosa — con vento e scarroccio puoi arrivare lo stesso passando dove non avevi guardato i fondali.</p>
     <p>La rotta non governa niente: non è un autotimoniere e non tocca la barca. È il tuo disegno, e resta anche se torni al via; cambiare carta invece la cancella, perché quei punti non vorrebbero più dire niente.</p>
+    <h2>Pianificare i bordi</h2>
+    <p>Metà delle volte il punto dove vuoi andare è proprio da dove viene il vento, e la linea che hai tracciato la barca <em>non la può tenere</em>. <kbd>V</kbd>, sulla carta, accende i <strong>bordi</strong>: il settore rosa attorno alla barca è la fetta in cui la linea diretta non conviene — al vento non la tieni proprio, sottovento la tieni ma ci perdi — e dentro c'è la spezzata da fare davvero, un bordo per mure, con la <strong>croce dove si vira</strong> (o dove si stramba, se il punto è sottovento). L'altra coppia possibile resta disegnata in sordina: virare prima o virare dopo costa uguale, cambia solo dove passi.</p>
+    <p>Il bersaglio è il <strong>punto di rotta attivo</strong> se ne hai segnato uno, altrimenti il punto sotto il <strong>cursore</strong>: puoi passeggiare sulla carta e vedere il piano rifarsi mentre ti chiedi dove andare. Il riquadro in basso a destra dà, per ogni bordo, mure, rilevamento e miglia, e in fondo il totale: <strong>quanto si allunga</strong> rispetto alla linea diretta e <strong>quanto tempo</strong> ci vuole al cronometro. Se un bordo finisce sulla terra il piano lo dice e, potendo, sceglie l'altra coppia; se non si passa da nessuna parte l'avviso resta, ed è il momento di segnare un punto in mezzo.</p>
+    <p>Gli angoli non sono un numero fisso: sono quelli di <em>massima VMG</em> — la velocità utile nella direzione dove vuoi andare — calcolati sul polare teorico di <strong>quella barca</strong> con <strong>quel vento</strong>, la stessa curva che vedi nel giornale. La barca da regata stringe più del gozzo, e con poco vento tutte poggiano: se cambi scafo o giri il cursore del vento, la spezzata cambia forma. Sono conti con randa e fiocco: lo spinnaker, in poppa, ti farà andare meglio di quanto scritto.</p>
+    <p>Sottovento la linea diretta è una scelta e non un ripiego: si tiene benissimo, si va solo più piano. Lì il piano confronta i <em>tempi</em> e, se strambare non guadagna almeno l'1%, te lo dice e ti consiglia la diretta — in poppa piena, con randa e fiocco, quasi sempre è così. Al vento invece la diretta non è una rotta: sotto l'angolo di bolina le vele non tirano più, e i bordi sono l'unico modo di arrivarci.</p>
+    <p>Come la rotta a matita, i bordi non governano niente: sono il compasso sulla carta, la barca la porti tu.</p>
     <h2>Le carte</h2>
     <p>Il menù in alto ha un elenco di <strong>porti di partenza</strong>: venti ancoraggi veri dell'arcipelago, da Preveza a Poros, passando per Fiskardo, Kioni, Vasiliki e Astakos. Sceglierne uno ti porta lì e azzera il cronometro.</p>
     <p>La mappa di serie è il <strong>Mar Ionio</strong>: Lefkada, Cefalonia, Itaca, Meganisi, Skorpios, Kalamos, Kastos e la costa della Grecia continentale, che sul bordo della carta è tagliata dritta perché la terra continua oltre. Le coste vengono da dati cartografici reali, quindi forme e posizioni relative sono quelle vere. Le distanze invece sono ridotte 1:6, altrimenti da Nydri a Vathy ci vorrebbe un'ora di navigazione.</p>
