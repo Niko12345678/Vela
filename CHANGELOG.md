@@ -89,6 +89,30 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
   flotta, e la carta che disegna tutto senza NaN e senza muovere la barca.
 
 ### Corretto
+- **La rotta consigliata adesso bordeggia, invece di puntare dentro il
+  vento.** Era una scelta di progetto sbagliata, non un caso limite: avevo
+  deciso che il consiglio rispondesse solo alla domanda *da che parte passo*
+  e che i bordi li chiedesse `V`, così una tratta sopravvento restava una
+  linea dritta. Ma la rotta tracciata è quella che poi si segue: seguirne
+  una che passa sotto l'angolo di bolina vuol dire fileggiare e fermarsi in
+  panne. Una rotta che non si può navigare non è un consiglio.
+  Ora le tratte che la barca non può tenere si aprono in bordi veri, con i
+  punti di virata dentro la spezzata, e il messaggio dice quante virate e
+  quante strambate sono. Gli angoli sono quelli di massima VMG di `V`, ma i
+  bordi non escono dal parallelogramma: quello dà una virata sola col
+  vertice a miglia di lato, che al largo va bene e in un canale è terra. Si
+  bordeggia come si bordeggia davvero, un bordo per volta, tenendo la mura
+  finché si arriva alla **layline** dell'altra o finché c'è acqua — e da lì
+  vengono da soli i bordi lunghi al largo, quelli corti dentro un canale (un
+  canale da 600 m si risale a sedici virate) e le mure sbilanciate quando la
+  terra è da una parte sola. Un bordo si chiude un po' prima della costa e
+  non contro: tirare fino allo scoglio vuol dire ritrovarsi in fondo a una
+  baia senza spazio per virare da nessuna delle due parti.
+  Dove nemmeno così si passa — un canale cieco col vento in faccia — la
+  tratta resta dritta ed è **dichiarata**: "attenzione: una tratta è troppo
+  stretta al vento". Su 153 traversate del Ionio con tre venti diversi
+  càpita a tre, ed è il posto dove in mare vero si accende il motore. Le
+  uscite dai porti non contano: sotto i 400 m è una manovra, non una rotta.
 - **La rotta consigliata non taglia più le penisole.** La griglia del
   consiglio guarda i nodi nei loro punti, e una lingua di terra più stretta
   della maglia — che su una traversata lunga arriva ai trecento metri —

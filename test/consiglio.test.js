@@ -49,31 +49,84 @@ test("il tempo di una tratta è lo stesso che calcolano i bordi", async () => {
   }
 });
 
-test("a mare libero non si inventano punti, nemmeno controvento", async () => {
+test("dove la linea si tiene non si inventano punti", async () => {
   const r = await runInGame(`
     ${MONDO}
-    // vento da nord. Sottovento, al traverso e in bolina piena: in mare
-    // aperto la risposta a "da che parte ci vado" è sempre "dritto", e i
-    // bordi sono un'altra domanda, quella a cui risponde V
+    // vento da nord. Sottovento e al traverso la linea diretta si tiene, e
+    // la risposta a "da che parte ci vado" è "dritto": nessun punto in più
     const prova = (nome, bx, by) => {
       const c = consigliaRotta(0, 0, bx, by);
       const u = c.punti[c.punti.length - 1];
       return { nome, punti: c.punti.length, scarto: Math.hypot(u.x - bx, u.y - by),
-               allunga: c.allunga, t: c.t, tDiretta: c.tDiretta };
+               allunga: c.allunga, t: c.t, tDiretta: c.tDiretta, virate: c.virate };
     };
-    report({ poppa: prova("poppa", 0, 3000), traverso: prova("traverso", 3000, 0),
-             bolina: prova("bolina", 0, -3000), obliqua: prova("obliqua", 1800, -2400) });
+    report({ traverso: prova("traverso", 3000, 0), lasco: prova("lasco", 2400, 1800) });
   `);
 
   for (const [nome, c] of Object.entries(r)) {
     assert.equal(c.punti, 1, `${nome}: un punto solo, quello dove si vuole arrivare`);
-    assert.ok(c.scarto < 1, `${nome}: e cade esattamente sul bersaglio (${c.scarto} m)`);
+    assert.equal(c.virate, 0, `${nome}: e nessuna manovra da fare`);
+    assert.ok(c.scarto < 1, `${nome}: cade esattamente sul bersaglio (${c.scarto} m)`);
     assert.ok(Math.abs(c.allunga - 1) < 1e-9, `${nome}: senza allungare la strada`);
     assert.ok(Math.abs(c.t - c.tDiretta) < 1e-6 * c.t,
       `${nome}: e il tempo è quello della linea diretta`);
   }
-  assert.ok(r.bolina.t > r.traverso.t,
-    `la stessa distanza in bolina costa più che al traverso (${r.bolina.t} vs ${r.traverso.t})`);
+});
+
+test("controvento la rotta consigliata si può navigare: bordeggia", async () => {
+  const r = await runInGame(`
+    ${MONDO}
+    // Il bersaglio è dritto sopravvento: una linea sola sarebbe una rotta
+    // che la barca NON PUÒ tenere — si fileggia e ci si ferma in panne. La
+    // rotta consigliata deve uscire bordeggiata, con ogni tratta a un
+    // angolo che le vele tirano
+    // il vento vero non è esattamente windDirBase: la base oscilla di
+    // qualche grado, e gli angoli vanno misurati da quello che soffia
+    const VENTO = windAt(0, 0);
+    const angolo = (a, b) => Math.abs(norm(VENTO.from - angOf(b.x-a.x, b.y-a.y)) * R2D);
+    const prova = (nome, bx, by) => {
+      const c = consigliaRotta(0, 0, bx, by);
+      const A = andature(VENTO.spd);
+      let px = 0, py = 0; const twa = [];
+      for (const p of c.punti) { twa.push(angolo({x:px,y:py}, p)); px = p.x; py = p.y; }
+      const u = c.punti[c.punti.length - 1];
+      return { nome, punti: c.punti.length, virate: c.virate, twa,
+               bolina: A.bolina.twa * R2D, allunga: c.allunga,
+               scarto: Math.hypot(u.x - bx, u.y - by),
+               // quanto ci si allontana dalla congiungente: bordeggiare non
+               // vuol dire andare a spasso
+               largo: Math.max(...c.punti.map(p =>
+                 Math.abs((p.x - 0) * (by - 0) - (p.y - 0) * (bx - 0)) / Math.hypot(bx, by))),
+               t: c.t };
+    };
+    // e sottovento: lì la diretta si terrebbe, quindi la strambata si
+    // disegna solo se fa arrivare prima davvero
+    const giu = consigliaRotta(0, 0, 0, 3000);
+    report({ corta: prova("corta", 0, -2000), lunga: prova("lunga", 0, -9000),
+             obliqua: prova("obliqua", 1800, -4200),
+             poppa: { strambate: giu.strambate, t: giu.t,
+                      dritto: consTempo(0, 0, 0, 3000, 300) } });
+  `);
+
+  const { poppa } = r; delete r.poppa;
+  assert.ok(poppa.t <= poppa.dritto * 1.0001,
+    `sottovento la rotta disegnata non è più lenta della linea dritta (${poppa.t} vs ${poppa.dritto})`);
+
+  for (const [nome, c] of Object.entries(r)) {
+    assert.ok(c.virate >= 1, `${nome}: sopravvento si vira almeno una volta (${c.virate})`);
+    assert.equal(c.punti, c.virate + 1, `${nome}: i punti sono le virate più l'arrivo`);
+    assert.ok(c.scarto < 2, `${nome}: e l'ultimo punto è il bersaglio (${c.scarto} m)`);
+    for (const a of c.twa)
+      assert.ok(a > c.bolina - 0.6,
+        `${nome}: nessuna tratta entra nella zona morta (${a.toFixed(1)}° contro ${c.bolina.toFixed(1)}° di bolina)`);
+    assert.ok(c.allunga > 1.15, `${nome}: bordeggiare allunga la strada (${c.allunga.toFixed(2)}×)`);
+  }
+  // una bolina lunga si spezza in più bordi invece di andare a prendere il
+  // vertice lontanissimo: costa uguale, ma si resta vicino alla congiungente
+  assert.ok(r.lunga.virate > r.corta.virate,
+    `su una bolina lunga si vira più volte (${r.lunga.virate} contro ${r.corta.virate})`);
+  assert.ok(r.lunga.largo < 9000 * 0.35,
+    `e la rotta resta vicina alla congiungente (${r.lunga.largo.toFixed(0)} m di lato)`);
 });
 
 test("un'isola in mezzo si gira, e la rotta resta in acqua", async () => {
@@ -84,6 +137,9 @@ test("un'isola in mezzo si gira, e la rotta resta in acqua", async () => {
       for (let i = 0; i < 24; i++) { const d = dv(i / 24 * TAU); p.push(cx + d.x*rr, cy + d.y*rr); }
       return mkIsland(p, "scoglio");
     };
+    // vento da est: la rotta verso nord è un traverso, che si tiene. Così
+    // gli unici punti in più sono quelli per girare l'isola, e non i bordi
+    windDirBase = 90 * D2R;
     // un'isola tonda a metà strada, larga il doppio del margine di sicurezza
     world.islands = [isola(0, -1500, 700)];
     world.shade = buildShade(world.islands);
@@ -121,18 +177,21 @@ test("l'ombra di vento si aggira anche dove il mare è libero", async () => {
     // che un'isola alta si porta sottovento. Il mare è tutto navigabile,
     // quindi se la rotta devia è per il vento e per nient'altro
     world.islands = [];
-    world.shade = [{ x: 0, y: -600, r: 420, L: 3400 }];
+    const ombra = [{ x: 0, y: -600, r: 420, L: 3400 }];
+    world.shade = ombra;
     const c = consigliaRotta(0, 0, 0, 2400);
-    let largo = 0, px = 0, py = 0;
+    let largo = 0;
     for (const p of c.punti) largo = Math.max(largo, Math.abs(p.x));
     // lo stesso viaggio senza il buco
     world.shade = [];
     const pulita = consigliaRotta(0, 0, 0, 2400);
     // e quanto costava tirare dritto dentro l'ombra
-    world.shade = [{ x: 0, y: -600, r: 420, L: 3400 }];
+    world.shade = ombra;
     const dritto = consTempo(0, 0, 0, 2400, 150);
+    let largoPulita = 0;
+    for (const p of pulita.punti) largoPulita = Math.max(largoPulita, Math.abs(p.x));
     report({ punti: c.punti.length, largo, t: c.t, dritto, allunga: c.allunga,
-             senzaOmbra: pulita.punti.length, tSenzaOmbra: pulita.t });
+             largoPulita, tSenzaOmbra: pulita.t });
   `);
 
   assert.ok(r.punti >= 2, `si esce dall'ombra e si rientra: servono punti (${r.punti})`);
@@ -140,7 +199,12 @@ test("l'ombra di vento si aggira anche dove il mare è libero", async () => {
   assert.ok(r.allunga > 1, "la strada si allunga");
   assert.ok(r.t < r.dritto * 0.97,
     `ma il tempo cala: ${r.t.toFixed(0)} s contro ${r.dritto.toFixed(0)} tirando dritto`);
-  assert.equal(r.senzaOmbra, 1, "senza il buco di vento la stessa rotta è una linea sola");
+  // senza il buco la rotta scende lungo la congiungente: quel poco che se ne
+  // stacca è la strambata, non una deviazione
+  assert.ok(r.largoPulita < 250,
+    `senza ombra la rotta resta sulla congiungente (${r.largoPulita.toFixed(0)} m di lato)`);
+  assert.ok(r.largo > r.largoPulita * 3,
+    "con l'ombra ci si allarga di tutt'altro ordine");
   assert.ok(r.t > r.tSenzaOmbra, "l'ombra si paga comunque: aggirarla costa più che non averla");
 });
 
@@ -214,6 +278,71 @@ test("le traversate che tagliavano le penisole ora le girano", async () => {
   for (const [rotta, c] of Object.entries(r))
     assert.ok(c.peggio > 90,
       `${rotta}: la rotta resta al largo della costa (${c.peggio.toFixed(0)} m nel punto peggiore)`);
+});
+
+test("sulla carta vera nessuna tratta lunga punta dentro il vento, e le poche che restano lo dicono", async () => {
+  const r = await runInGame(`
+    helpEl.classList.remove("on"); tut.on = false;
+    mapMode = "ionio"; newWorld("mantova");
+    const porti = world.ports.filter(o => o.n !== "Mare aperto");
+    // il conto va fatto con lo stesso vento del pianificatore: le raffiche
+    // le spegne lui per la durata del piano, e girano di qualche grado
+    let rotte = 0, avvisate = 0, dentro = 0, dichiarate = 0, peggio = 0;
+    for (const [vento, dir] of [[8, 315], [5, 180], [12, 45]]) {
+      windBase = vento; windDirBase = dir * D2R;
+      for (let i = 0; i < porti.length; i += 2) {
+        const a = porti[i], b = porti[(i + 5) % porti.length];
+        if (a === b) continue;
+        const c = consigliaRotta(a.x, a.y, b.x, b.y);
+        rotte++;
+        if (c.strette) avvisate++;
+        dichiarate += c.strette;
+        const raffiche = gusts; gusts = []; shadeDir = dv(windDirBase + Math.PI);
+        let px = a.x, py = a.y;
+        for (const q of c.punti) {
+          const d = Math.hypot(q.x - px, q.y - py);
+          const w = windAt((px + q.x) / 2, (py + q.y) / 2);
+          const scarto = (Math.abs(norm(w.from - angOf(q.x - px, q.y - py)))
+                          - andature(w.spd).bolina.twa) * R2D;
+          if (d > CONS_USCITA && scarto < -8) { dentro++; peggio = Math.min(peggio, scarto); }
+          px = q.x; py = q.y;
+        }
+        gusts = raffiche;
+      }
+    }
+    report({ rotte, avvisate, dentro, dichiarate, peggio });
+  `, { timeoutMs: 300000 });
+
+  assert.equal(r.dentro, r.dichiarate,
+    `le tratte che puntano dentro il vento sono tutte dichiarate (${r.dentro} trovate, ${r.dichiarate} dichiarate)`);
+  assert.ok(r.avvisate <= r.rotte * 0.2,
+    `restano l'eccezione: ${r.avvisate} rotte su ${r.rotte} con un avviso`);
+});
+
+test("una tratta che non si può bordeggiare viene dichiarata, non nascosta", async () => {
+  const r = await runInGame(`
+    ${MONDO}
+    // due canali ciechi col vento che ci soffia dentro e il bersaglio in
+    // fondo. In quello largo si esce a bordi corti, come si fa davvero; in
+    // quello stretto non c'è spazio per virare, e il consiglio deve dirlo
+    // invece di disegnare una linea che manderebbe in panne
+    const muro = (x0, y0, x1, y1) => mkIsland([x0,y0, x1,y0, x1,y1, x0,y1], "molo");
+    const canale = semi => {
+      world.islands = [muro(-3000, -3000, -semi, 200), muro(semi, -3000, 3000, 200)];
+      world.shade = [];
+      const c = consigliaRotta(0, 500, 0, -2600);
+      return { strette: c.strette, punti: c.punti.length, virate: c.virate,
+               avviso: manovreDi(c), lato: Math.round(c.tratte[0].dist) };
+    };
+    report({ largo: canale(300), stretto: canale(150) });
+  `);
+
+  assert.equal(r.largo.strette, 0, "nel canale largo si bordeggia, e non c'è niente da segnalare");
+  assert.ok(r.largo.virate > 5, `a bordi corti: ${r.largo.virate} virate`);
+  assert.ok(r.stretto.strette >= 1, "in quello stretto la tratta impossibile è contata");
+  assert.equal(r.stretto.virate, 0, "perché lì virare non si può");
+  assert.match(r.stretto.avviso, /troppo strett/,
+    `e l'avviso lo dice a chiare lettere ("${r.stretto.avviso}")`);
 });
 
 test("il bersaglio è il porto d'arrivo, poi l'incarico, poi la rotta, poi il cursore", async () => {
@@ -322,9 +451,11 @@ test("sulla carta vera la rotta consigliata passa in acqua, e il conto è svelto
   `);
 
   for (const c of [r.primo, ...r.poi]) {
-    // pochi punti, come si traccia a matita: otto è l'obiettivo, il giro
-    // largo attorno a Cefalonia ne chiede qualcuno in più e sono terra vera
-    assert.ok(c.punti >= 1 && c.punti <= 14, `una rotta da leggere a colpo d'occhio (${c.punti})`);
+    // pochi punti, come si traccia a matita: otto è l'obiettivo del giro di
+    // riduzione, ma il giro largo attorno a Cefalonia ne chiede qualcuno in
+    // più — quelli sono terra vera — e i bordi di una bolina se ne portano
+    // dietro altri, che sono manovre e non posti
+    assert.ok(c.punti >= 1 && c.punti <= 24, `una rotta da leggere a colpo d'occhio (${c.punti})`);
     assert.ok(c.peggio > 60, `la rotta non rade la costa (${c.peggio.toFixed(0)} m dal più vicino)`);
     assert.ok(c.allunga >= 1 && c.allunga < 2.6,
       `girare le terre allunga il giusto (${c.allunga.toFixed(2)}× su ${c.dritto.toFixed(1)} nm dritti)`);
