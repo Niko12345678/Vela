@@ -694,6 +694,7 @@ function comando(k,shift){
     else{pianoTogli(piano.pts.length-1);
          say(piano.pts.length?"Ultimo punto tolto — ne restano "+piano.pts.length:"Rotta cancellata");}
   }
+  if(k==="v")toggleBordi();
   if(k==="h")toggleHelp();
   if(k==="r")askConfirm("Riportare la barca al via? La regata in corso e il cronometro ripartono da zero.",resetBoat);
   if(k==="z")cyclePilot();
@@ -2263,6 +2264,296 @@ function drawPiano(z){
   ctx.textAlign="left";ctx.lineCap="butt";
 }
 
+/* ══════════════════ pianificazione dei bordi ══════════════════ */
+/* Dove il vento non lascia andare dritti si va a bordi: due tratte in
+   diagonale al posto di una linea che la barca non può tenere. Questa
+   parte risponde sulla carta alla domanda che ci si fa col compasso in
+   mano — *voglio andare lì, il vento viene di là: come ci arrivo, e quanto
+   ci metto?* — e come la rotta a matita non governa niente.
+
+   Le due andature buone non sono scelte a mano: si trovano massimizzando
+   la **VMG**, la componente della velocità nella direzione utile, sul
+   polare teorico della barca — lo stesso `polarSpeed` del giornale. Sono
+   quindi le andature di *quello* scafo con *quel* vento: il gozzo stringe
+   meno del cutter e si vede nel disegno, e con poco vento si poggia.
+
+   Il polare costa: risolvere l'equilibrio velico è ~0,8 ms e la ricerca ne
+   chiede una settantina. Per questo i risultati stanno in due memorie a
+   chiave (barca + vento arrotondato a mezzo m/s) e la ricerca è in due
+   passate — grossolana a 3°, fine a mezzo grado attorno al massimo. La
+   carta si ridisegna a ogni fotogramma e non può rifare quei conti ogni
+   volta; col pannello aperto il tempo è fermo, quindi la chiave non si
+   muove e la memoria risponde sempre.
+
+   Il colore è il magenta delle carte vere, dove indica le informazioni
+   consigliate e non la costa rilevata: qui è un suggerimento, non un
+   fondale.                                                             */
+const BORDI_ACQUA=60;      // margine dalla costa sotto cui un bordo è "sulla terra"
+const polarMemo=new Map(), andatureMemo=new Map();
+const bordiChiave=vento=>barcaId+"|"+(Math.round(vento*2)/2);
+
+function polarMemo1(twaDeg,vento){
+  const k=bordiChiave(vento)+"|"+(Math.round(twaDeg*2)/2);
+  let v=polarMemo.get(k);
+  if(v===undefined){
+    if(polarMemo.size>4000)polarMemo.clear();
+    v=polarSpeed(twaDeg,vento);polarMemo.set(k,v);
+  }
+  return v;
+}
+/* L'andatura di massima VMG dentro un settore: `verso` +1 guadagna al
+   vento, −1 sottovento. Le curve di VMG hanno un massimo solo in questi
+   settori, quindi la passata grossolana non può perderlo di vista.   */
+function vmgMax(vento,a0,a1,verso){
+  let best=-1e9, ang=a0;
+  const prova=a=>{const g=polarMemo1(a,vento)*verso*Math.cos(a*D2R); if(g>best){best=g;ang=a;}};
+  for(let a=a0;a<=a1+1e-9;a+=3) prova(a);
+  const c=ang;
+  for(let a=Math.max(a0,c-3);a<=Math.min(a1,c+3)+1e-9;a+=0.5) prova(a);
+  return {twa:ang*D2R, v:polarMemo1(ang,vento), vmg:Math.abs(best)};
+}
+function andature(vento){
+  const k=bordiChiave(vento);
+  let a=andatureMemo.get(k);
+  if(!a){
+    if(andatureMemo.size>200)andatureMemo.clear();
+    a={bolina:vmgMax(vento,26,88,1), poppa:vmgMax(vento,92,180,-1)};
+    andatureMemo.set(k,a);
+  }
+  return a;
+}
+/* Un bordo che sfiora la costa non è un bordo: si campiona ogni 100 m e si
+   guarda la profondità, con lo stesso metro dell'incaglio ma un margine
+   largo, perché qui si sta decidendo dove passare, non si sta passando. */
+function bordoSullaTerra(ax,ay,bx,by){
+  if(!world||!world.islands||!world.islands.length)return false;
+  const n=Math.max(2,Math.ceil(Math.hypot(bx-ax,by-ay)/100));
+  for(let i=0;i<=n;i++){
+    const t=i/n;
+    if(landDepth(world.islands,ax+(bx-ax)*t,ay+(by-ay)*t)>-BORDI_ACQUA)return true;
+  }
+  return false;
+}
+/* Il piano per andare da A a B con il vento che viene da `da`.
+
+   `twa` è l'angolo al vento della rotta diretta, positivo se il vento
+   verrebbe da dritta: la stessa convenzione di `beta`. Se sta fra la
+   bolina buona e la poppa buona la linea si tiene e non c'è niente da
+   pianificare. Altrimenti servono due tratte, una per mure, e le loro
+   lunghezze escono da un sistema di due equazioni: `a·u_dritta +
+   b·u_sinistra = B−A`. La somma non dipende dall'ordine — è lo stesso
+   parallelogramma — quindi le due opzioni costano uguale e cambia solo
+   dove cade il vertice, cioè dove si vira. Per questo si può scegliere il
+   bordo lungo per primo senza pagare nulla: tiene la barca vicino alla
+   congiungente e lascia aperte le porte se il vento gira.
+
+   Le due strette sono però diverse. **Al vento** la linea diretta non si
+   tiene proprio: sotto l'angolo di bolina le vele non tirano più e i
+   bordi sono l'unico modo di arrivarci. **Sottovento** invece la linea si
+   tiene benissimo, si va solo più piano: strambare paga solo se il tempo
+   guadagnato è tempo vero. Per questo il piano confronta sempre le due
+   durate e, quando il guadagno è sotto l'1%, dice di tenere la diretta —
+   in poppa piena, con randa e fiocco, quel guadagno è quasi sempre nulla,
+   e consigliare uno zigzag inutile sarebbe un cattivo consiglio.      */
+const BORDI_PAGA=0.01;             // sotto questo guadagno di tempo, zigzagare non paga
+function bordiPer(ax,ay,bx,by,da,spd){
+  const dx=bx-ax, dy=by-ay, dist=Math.hypot(dx,dy);
+  if(!(dist>1)||!(spd>0.2))return null;
+  const ril=angOf(dx,dy), twa=norm(da-ril), at=Math.abs(twa);
+  const A=andature(spd);
+  const stretta=at<A.bolina.twa, larga=at>A.poppa.twa;
+  const out={fonte:"punto",bersaglio:{x:bx,y:by},ril,dist,twa,vento:{da,spd}};
+  const vDir=polarMemo1(at*R2D,spd);                 // quanto rende la linea diretta
+  out.vDiretta=vDir; out.tDiretta=vDir>0.02?dist/vDir:Infinity;
+  const diretta=()=>{
+    out.tipo="diretta"; out.twaOtt=at; out.v=vDir; out.guadagno=0;
+    out.hD=out.hS=ril; out.totale=dist; out.t=out.tDiretta; out.allunga=1;
+    out.altra=null;
+    out.scelta={mure:twa>=0?"dritta":"sinistra",vertice:null,
+                rami:[{rotta:ril,lung:dist,mure:twa>=0?"dritta":"sinistra",twa:at,v:vDir}],
+                terra:bordoSullaTerra(ax,ay,bx,by)};
+    return out;
+  };
+  if(!stretta&&!larga)return diretta();
+  const A2=stretta?A.bolina:A.poppa, opt=A2.twa, v=A2.v;
+  const hD=norm(da-opt), hS=norm(da+opt);      // mure a dritta: il vento da dritta, cioè twa>0
+  const uD=dv(hD), uS=dv(hS);
+  const det=uD.x*uS.y-uD.y*uS.x;
+  if(Math.abs(det)<1e-9)return null;           // le due mure parallele: non capita con opt in ]0,90[∪]90,180[
+  const lD=(dx*uS.y-dy*uS.x)/det, lS=(uD.x*dy-uD.y*dx)/det;
+  if(!(lD>=0)||!(lS>=0))return null;
+  const totale=lD+lS, t=totale/Math.max(v,0.05);
+  // sottovento la diretta è una scelta, non un ripiego: se i bordi non
+  // guadagnano tempo vero, il piano è non farli
+  if(larga&&!(t<out.tDiretta*(1-BORDI_PAGA))){const d=diretta();d.pari=true;return d;}
+  out.tipo=stretta?"bolina":"poppa"; out.twaOtt=opt; out.v=v; out.vmg=A2.vmg;
+  out.hD=hD; out.hS=hS;
+  out.totale=totale; out.t=t; out.allunga=totale/dist;
+  out.guadagno=out.tDiretta-t;
+  const opzione=mure=>{
+    const p=mure==="dritta"?[{u:uD,l:lD,h:hD,m:"dritta"},{u:uS,l:lS,h:hS,m:"sinistra"}]
+                           :[{u:uS,l:lS,h:hS,m:"sinistra"},{u:uD,l:lD,h:hD,m:"dritta"}];
+    const vx=ax+p[0].u.x*p[0].l, vy=ay+p[0].u.y*p[0].l;
+    return {mure,vertice:{x:vx,y:vy},
+            rami:p.map(q=>({rotta:q.h,lung:q.l,mure:q.m,twa:opt,v})),
+            terra:bordoSullaTerra(ax,ay,vx,vy)||bordoSullaTerra(vx,vy,bx,by)};
+  };
+  const opz=[opzione("dritta"),opzione("sinistra")];
+  const pulite=opz.filter(o=>!o.terra);
+  const buone=(pulite.length?pulite:opz).slice().sort((p,q)=>q.rami[0].lung-p.rami[0].lung);
+  out.scelta=buone[0];
+  out.altra=opz.find(o=>o!==out.scelta)||null;
+  return out;
+}
+/* Dove si vuole andare: il punto di rotta attivo se una rotta c'è — è
+   quello il "dove voglio andare" già scritto sulla carta — altrimenti il
+   punto sotto il cursore, che è come appoggiarci il compasso. */
+let bordiOn=false;
+function bordiBersaglio(){
+  const p=piano.pts[piano.i];
+  if(p)return {x:p.x,y:p.y,fonte:"punto"};
+  if(chart.mx>0){const q=c2w(chart.mx,chart.my);return {x:q.x,y:q.y,fonte:"cursore"};}
+  return null;
+}
+function bordiPiano(){
+  const b=bordiBersaglio(); if(!b)return null;
+  const w=windAt(boat.x,boat.y);            // lo stesso vento della rosa, letto dov'è la barca
+  const p=bordiPer(boat.x,boat.y,b.x,b.y,w.from,w.spd);
+  if(p)p.fonte=b.fonte;
+  return p;
+}
+function toggleBordi(){
+  bordiOn=!bordiOn;
+  if(!chart.on)say(bordiOn?"Bordi accesi — si vedono sulla carta (C)":"Bordi spenti");
+}
+
+const BORDI_COL={linea:"rgba(176,48,138,.95)",alt:"rgba(176,48,138,.34)",
+                 zona:"rgba(176,48,138,.09)",orlo:"rgba(176,48,138,.30)",
+                 terra:"#a3402a"};
+const bordiGradi=a=>String(Math.round((a*R2D+360)%360)%360).padStart(3,"0")+"°";
+const bordiMure=m=>m==="dritta"?"MURE A DRITTA":"MURE A SINISTRA";
+
+/* Il disegno in coordinate del mare: la zona morta, i due bordi scelti,
+   l'altra coppia in sordina e il vertice dove si vira. */
+function drawBordiMare(bp){
+  const z=chart.z;
+  if(bp.tipo!=="diretta"){
+    // il settore che la barca non può tenere, aperto dalla parte del vento
+    // (in bolina) o della poppa: è la ragione per cui esiste tutto il resto
+    const r=bp.dist*1.2;
+    const a1=(bp.tipo==="bolina"?bp.hD:bp.hS)-Math.PI/2;
+    const a2=(bp.tipo==="bolina"?bp.hS:bp.hD)-Math.PI/2;
+    ctx.fillStyle=BORDI_COL.zona;
+    ctx.beginPath();ctx.moveTo(boat.x,boat.y);ctx.arc(boat.x,boat.y,r,a1,a2);ctx.closePath();ctx.fill();
+    ctx.strokeStyle=BORDI_COL.orlo;ctx.lineWidth=1/z;
+    ctx.setLineDash([5/z,5/z]);ctx.stroke();ctx.setLineDash([]);
+  }
+  // la congiungente: la rotta che si vorrebbe e che non si può tenere
+  ctx.strokeStyle=BORDI_COL.alt;ctx.lineWidth=1.1/z;
+  ctx.setLineDash([3/z,6/z]);
+  ctx.beginPath();ctx.moveTo(boat.x,boat.y);ctx.lineTo(bp.bersaglio.x,bp.bersaglio.y);ctx.stroke();
+  ctx.setLineDash([]);
+  const spezzata=(o,col,w,dash)=>{
+    ctx.strokeStyle=col;ctx.lineWidth=w/z;
+    if(dash)ctx.setLineDash([dash[0]/z,dash[1]/z]);
+    ctx.beginPath();ctx.moveTo(boat.x,boat.y);
+    if(o.vertice)ctx.lineTo(o.vertice.x,o.vertice.y);
+    ctx.lineTo(bp.bersaglio.x,bp.bersaglio.y);ctx.stroke();
+    ctx.setLineDash([]);
+  };
+  if(bp.altra)spezzata(bp.altra,BORDI_COL.alt,1.4,[7,6]);
+  spezzata(bp.scelta,bp.scelta.terra?BORDI_COL.terra:BORDI_COL.linea,2.2,null);
+  const v=bp.scelta.vertice;
+  if(v){
+    ctx.strokeStyle=bp.scelta.terra?BORDI_COL.terra:BORDI_COL.linea;ctx.lineWidth=1.8/z;
+    const r=7/z;
+    ctx.beginPath();ctx.moveTo(v.x-r,v.y-r);ctx.lineTo(v.x+r,v.y+r);
+    ctx.moveTo(v.x+r,v.y-r);ctx.lineTo(v.x-r,v.y+r);ctx.stroke();
+    ctx.beginPath();ctx.arc(v.x,v.y,r*1.6,0,TAU);ctx.stroke();
+  }
+}
+
+/* Il disegno in pixel: le etichette dei bordi e il pannello dei numeri.
+   `S` converte mare → schermo, la stessa della carta. */
+function drawBordiPannello(bp,S){
+  const stretto=schermoStretto();
+  const fondo=VH-16-(joy.on?46:0);
+  const scrivi=(righe,x1,y1)=>{                     // riquadro ancorato in basso a destra
+    ctx.font="11px ui-monospace,monospace";
+    let w=0;for(const r of righe)w=Math.max(w,ctx.measureText(r[0]).width);
+    w+=20;
+    const h=righe.length*15+12, x=Math.max(8,x1-w), y=y1-h;   // schermo stretto: non esce a sinistra
+    ctx.fillStyle="rgba(255,255,255,.86)";ctx.fillRect(x,y,w,h);
+    ctx.strokeStyle=BORDI_COL.orlo;ctx.lineWidth=1;ctx.strokeRect(x+.5,y+.5,w-1,h-1);
+    ctx.textAlign="left";ctx.textBaseline="middle";
+    righe.forEach((r,i)=>{ctx.fillStyle=r[1]||CHART.ink;ctx.fillText(r[0],x+10,y+14+i*15);});
+    return {x,y,w,h};
+  };
+  if(!bp){
+    scrivi([["BORDI · "+(stretto?"TOCCA IL MARE PER SEGNARE DOVE VUOI ANDARE"
+                                :"SEGNA UN PUNTO DI ROTTA, O PUNTA IL CURSORE DOVE VUOI ANDARE"),
+            CHART.dim]],VW-16,fondo);
+    return;
+  }
+  // etichetta di ogni bordo: rilevamento e miglia, come si scrive a matita
+  const eti=(ax,ay,bx,by,col)=>{
+    const d=Math.hypot(bx-ax,by-ay);
+    if(d*chart.z<46)return;
+    const q=S((ax+bx)/2,(ay+by)/2);
+    if(q.x<-70||q.x>VW+70||q.y<-30||q.y>VH+30)return;
+    const t=bordiGradi(angOf(bx-ax,by-ay))+"  "+nm(d).toFixed(2)+" nm";
+    ctx.font="10px ui-monospace,monospace";
+    const w=ctx.measureText(t).width+10;
+    ctx.fillStyle="rgba(255,255,255,.78)";ctx.fillRect(q.x-w/2,q.y-8,w,16);
+    ctx.textAlign="center";ctx.textBaseline="middle";
+    ctx.fillStyle=col;ctx.fillText(t,q.x,q.y);
+  };
+  const col=bp.scelta.terra?BORDI_COL.terra:"#8c2570";
+  const v=bp.scelta.vertice, b=bp.bersaglio;
+  // sulla diretta i due numeri li scrive già la rotta a matita, e sarebbero
+  // gli stessi: si etichettano solo i bordi, che sono roba nuova
+  if(v){
+    eti(boat.x,boat.y,v.x,v.y,col);eti(v.x,v.y,b.x,b.y,col);
+                                                    // il vertice dice cosa si fa lì
+    const q=S(v.x,v.y);
+    if(q.x>-60&&q.x<VW+60&&q.y>-30&&q.y<VH+30){
+      const t=bp.tipo==="bolina"?"VIRA":"STRAMBA";
+      ctx.font="9px ui-monospace,monospace";ctx.textAlign="center";ctx.textBaseline="middle";
+      ctx.fillStyle=col;ctx.fillText(t,q.x,q.y-18);
+    }
+  }
+  const kn=x=>(x*1.94384).toFixed(1).replace(".",",")+" kn";
+  const righe=[];
+  if(bp.tipo==="diretta"){
+    righe.push(["BORDI · DI FILATA",CHART.ink]);
+    righe.push([bordiGradi(bp.ril)+" · "+Math.round(Math.abs(bp.twa)*R2D)+"° AL VENTO "+
+                (bp.twa>=0?"DA DRITTA":"DA SINISTRA"),CHART.dim]);
+    righe.push([nm(bp.dist).toFixed(2)+" nm · "+kn(bp.v)+" · "+fmtT(bp.t).split(".")[0],CHART.ink]);
+    if(bp.pari)righe.push(["IN POPPA STRAMBARE NON PAGA: TIENI LA DIRETTA",CHART.dim]);
+  }else{
+    righe.push(["BORDI · "+(bp.tipo==="bolina"?"DI BOLINA":"IN POPPA")+
+                " A "+Math.round(bp.twaOtt*R2D)+"° · "+kn(bp.v),CHART.ink]);
+    bp.scelta.rami.forEach((r,i)=>{
+      righe.push([(i+1)+"  "+bordiMure(r.mure).padEnd(16)+bordiGradi(r.rotta)+"  "+
+                  nm(r.lung).toFixed(2)+" nm",col]);
+    });
+    righe.push([nm(bp.totale).toFixed(2)+" nm · "+bp.allunga.toFixed(2).replace(".",",")+
+                "× la diretta · "+fmtT(bp.t).split(".")[0],CHART.ink]);
+    // più strada, meno tempo: è tutto il senso dei bordi. Sottovento il
+    // confronto con la diretta è un numero onesto, perché quella rotta si
+    // potrebbe davvero tenere; al vento no, e dire "guadagni tre ore" su
+    // una rotta che nessuno terrebbe sarebbe un numero senza significato
+    righe.push([bp.tipo==="bolina" ? "LA DIRETTA È SOTTO L'ANGOLO DI BOLINA: NON SI TIENE"
+                : isFinite(bp.guadagno)
+                  ? "GUADAGNI "+fmtT(bp.guadagno).split(".")[0]+" SULLA LINEA DIRETTA"
+                  : "LA LINEA DIRETTA NON SI TIENE",CHART.dim]);
+  }
+  if(bp.scelta.terra)righe.push(["ATTENZIONE: IL BORDO TOCCA TERRA",BORDI_COL.terra]);
+  else if(bp.altra&&bp.altra.terra)righe.push(["L'ALTRA COPPIA DI BORDI TOCCA TERRA",CHART.dim]);
+  if(bp.fonte==="cursore")righe.push([stretto?"DAL CURSORE":"DAL CURSORE · SEGNA UN PUNTO PER FISSARLO",CHART.dim]);
+  scrivi(righe,VW-16,fondo);
+}
+
 /* ══════════════════ carta nautica ══════════════════ */
 /* Vista a tutto schermo con l'aspetto di una carta di navigazione: carta
    chiara, terre color sabbia, secche azzurre, reticolato in gradi veri.  */
@@ -2286,6 +2577,9 @@ function drawChart(){
   ctx.setTransform(DPR,0,0,DPR,0,0);
   ctx.fillStyle=CHART.deep;ctx.fillRect(0,0,VW,VH);
   const g=world.geo;
+  // il piano dei bordi si calcola una volta sola: serve due volte, in
+  // coordinate del mare per le linee e in pixel per i numeri
+  const bp=bordiOn?bordiPiano():null;
   ctx.save();
   ctx.translate(VW/2,VH/2);ctx.scale(chart.z,chart.z);ctx.translate(-chart.x,-chart.y);
   const hw=VW/2/chart.z, hh=VH/2/chart.z;
@@ -2356,6 +2650,7 @@ function drawChart(){
     }
     ctx.setLineDash([]);ctx.lineCap="butt";
   }
+  if(bp)drawBordiMare(bp);
   ctx.restore();
 
   // ─ simboli in pixel, così restano leggibili a ogni zoom
@@ -2427,8 +2722,8 @@ function drawChart(){
   // etichette del reticolato sui bordi
   ctx.font="9px ui-monospace,monospace";ctx.fillStyle=CHART.dim;
   // le latitudini partono più in basso su schermo stretto: lassù ci sono le
-  // due righe di intestazione, e ci finivano dentro
-  const yMin=schermoStretto()?72:20;
+  // tre righe di intestazione, e ci finivano dentro
+  const yMin=schermoStretto()?86:20;
   for(const L of labels){
     if(L[0]!==null&&L[0]>40&&L[0]<VW-40){ctx.textAlign="center";ctx.fillText(L[2],L[0],14);}
     if(L[1]!==null&&L[1]>yMin&&L[1]<VH-20){ctx.textAlign="left";ctx.fillText(L[2],6,L[1]);}
@@ -2494,6 +2789,8 @@ function drawChart(){
     }
   }
 
+  if(bordiOn)drawBordiPannello(bp,S);
+
   // intestazione
   ctx.textAlign="left";ctx.textBaseline="alphabetic";
   ctx.fillStyle=CHART.ink;ctx.font="12px ui-monospace,monospace";
@@ -2517,6 +2814,13 @@ function drawChart(){
       ? "TOCCA IL MARE PER SEGNARE UN PUNTO DI ROTTA"
       : "CLICCA SUL MARE PER SEGNARE UN PUNTO DI ROTTA: LA LINEA RESTA TRATTEGGIATA ANCHE IN NAVIGAZIONE",24,60);
   }
+  // la riga dei bordi: dove si accendono, e cosa stanno guardando
+  ctx.fillStyle=bordiOn?"#8c2570":CHART.dim;
+  ctx.fillText(bordiOn
+    ? (stretto ? "BORDI ACCESI · BORDI SPEGNE"
+               : "BORDI ACCESI · V LI SPEGNE · IL PIANO SEGUE IL PUNTO DI ROTTA ATTIVO, O IL CURSORE")
+    : (stretto ? "BORDI: COME ARRIVARCI COL VENTO CHE C'È"
+               : "V ACCENDE I BORDI: COME ARRIVARE AL PUNTO COL VENTO CHE C'È, E IN QUANTO"),24,74);
   ctx.textBaseline="alphabetic";
 }
 
