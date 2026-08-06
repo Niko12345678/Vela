@@ -10,7 +10,7 @@ italiano**: continua così.
 ## Comandi
 
 ```bash
-npm test         # 65 test, headless, ~6 s — NON serve npm install
+npm test         # 81 test, headless, ~8 s — NON serve npm install
 npm run dev      # http://localhost:5173
 npm run build    # dist/
 npm run charts   # rigenera le carte (serve Python + shapely + pyyaml)

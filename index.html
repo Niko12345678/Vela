@@ -49,6 +49,16 @@
   button:hover{background:rgba(226,102,45,.35);border-color:var(--accent)}
   button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .val{color:var(--chart);min-width:44px;display:inline-block}
+  /* Strumenti a schermo: una riga tutta sua nel menù, chiusa finché non
+     serve — sono otto caselle e aperte prenderebbero mezzo pannello */
+  #hudwrap{flex:1 1 100%;font-size:11px;letter-spacing:.06em}
+  #hudwrap summary{cursor:pointer;color:var(--chart-dim);text-transform:uppercase;
+    letter-spacing:.1em;list-style:none}
+  #hudwrap summary::-webkit-details-marker{display:none}
+  #hudwrap summary::before{content:"▸ "}
+  #hudwrap[open] summary::before{content:"▾ "}
+  #hudwrap summary:hover{color:var(--chart)}
+  #hudsel{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px}
 
   #tut{top:58px;left:50%;transform:translateX(-50%);width:min(520px,calc(100% - 28px));
     padding:12px 16px 11px;display:none;z-index:6;font-size:12px;line-height:1.6}
@@ -200,7 +210,7 @@
 
 <div id="settings" class="panel">
   <label>Vento <input id="wind" type="range" min="2" max="16" step="0.5" value="7"><span class="val" id="windv">7.0 m/s</span></label>
-  <label>Ritmo <select id="tscale"><option value="1">1×</option><option value="1.5">1,5×</option><option value="2" selected>2×</option><option value="3">3×</option><option value="4">4×</option><option value="6">6×</option><option value="8">8×</option><option value="12">12×</option></select></label>
+  <label>Ritmo <select id="tscale"><option value="1">1×</option><option value="1.5">1,5×</option><option value="2" selected>2×</option><option value="3">3×</option><option value="4">4×</option><option value="6">6×</option><option value="8">8×</option><option value="12">12×</option><option value="16">16×</option></select></label>
   <label>Tratteggi <input id="vis" type="range" min="0" max="1.6" step="0.1" value="1"></label>
   <label>Mappa <select id="mapsel"><option value="ionio" selected>Mar Ionio</option><option value="rnd">Casuale</option></select></label>
   <label>Barca <select id="boatsel"></select></label>
@@ -211,6 +221,12 @@
   <label>Passo rotelle <select id="wstep"><option value="1">1×</option><option value="0.5">1/2</option><option value="0.2" selected>1/5</option><option value="0.1">1/10</option></select></label>
   <label><input id="winv" type="checkbox"> Rotelle invertite</label>
   <label><input id="joyon" type="checkbox"> Comandi a dito</label>
+  <!-- le caselle le costruisce game.js da HUD_VOCI: l'elenco che conta è
+       quello, e due elenchi da tenere in accordo sono uno di troppo -->
+  <details id="hudwrap">
+    <summary>Strumenti a schermo</summary>
+    <div id="hudsel"></div>
+  </details>
   <button id="tutb">Tutorial</button>
   <button id="gen">Nuova mappa</button>
   <button id="reset">Riporta al via</button>
@@ -366,7 +382,10 @@
       <tr><td><kbd>Z</kbd></td><td>Governo: richiamo al centro → rotta → vento → barra libera</td></tr>
       <tr><td><kbd>Spazio</kbd></td><td>Barra al cavallino, autotimoniere disinserito · <kbd>Maiusc</kbd>+<kbd>Spazio</kbd> azzera anche il cavallino</td></tr>
       <tr><td><kbd>T</kbd></td><td>Regolazione automatica delle vele (assistenza)</td></tr>
-      <tr><td><kbd>+</kbd> <kbd>−</kbd></td><td>Zoom</td></tr>
+      <tr><td><kbd>+</kbd> <kbd>−</kbd></td><td><strong>Ritmo</strong> di gioco, un gradino per volta: da 1× a 16×</td></tr>
+      <tr><td><kbd>0</kbd></td><td>Ritmo 1×, <strong>tempo reale</strong> (sulla carta aperta inquadra tutto)</td></tr>
+      <tr><td><kbd>Pag↑</kbd> <kbd>Pag↓</kbd></td><td>Zoom della vista sul mare</td></tr>
+      <tr><td>Rotella sulla carta ridotta</td><td><strong>Zoom della carta ridotta</strong> in basso a destra: si stringe attorno alla barca</td></tr>
       <tr><td><kbd>C</kbd></td><td>Carta nautica a tutto schermo</td></tr>
       <tr><td>Click sulla carta</td><td><strong>Segna un punto di rotta</strong> · un click sopra un punto lo toglie</td></tr>
       <tr><td><kbd>Canc</kbd> (sulla carta)</td><td>Toglie l'ultimo punto · <kbd>Maiusc</kbd>+<kbd>Canc</kbd> cancella tutta la rotta</td></tr>
@@ -452,7 +471,10 @@
     <p>Avvolgere il fiocco (<kbd>F</kbd>) toglie potenza ma sbilancia forte verso l'orza: se lo fai, lasca anche la randa.</p>
     <p><em>Passo rotelle</em>, in alto, decide quanto vale uno scatto di rotella su tutto quello che si regola così — scotte, barra, cavallino, rotta impostata. A <strong>1×</strong> uno scatto muove la scotta di ~6°, che va bene per lascare tutto in poppa e va male per cercare la fascia verde, larga pochi gradi: lì scegli <strong>1/5</strong> o <strong>1/10</strong> e uno scatto vale mezzo grado. Lo zoom della carta non ne è toccato, resta come prima.</p>
     <p><em>Mare facile</em>, in alto, attenua raffiche e squilibri. Toglilo quando ti senti a tuo agio.</p>
-    <p><em>Ritmo</em>, da 1× a 6×, accelera lo scorrere del tempo: velocità, virate, raffiche e cronometro cambiano tutti insieme, quindi la barca si comporta esattamente allo stesso modo, solo che una traversata dura meno. Di serie è 2×.</p>
+    <p><em>Ritmo</em>, da 1× a 16×, accelera lo scorrere del tempo: velocità, virate, raffiche e cronometro cambiano tutti insieme, quindi la barca si comporta esattamente allo stesso modo, solo che una traversata dura meno. Di serie è 2×. Si cambia anche senza aprire il menù: <kbd>+</kbd> e <kbd>−</kbd> salgono e scendono di un gradino, <kbd>0</kbd> riporta al <strong>tempo reale</strong>. Il 16× serve per il canale vuoto da attraversare; l'1× per entrare in porto, dove ogni secondo conta.</p>
+    <h2>Scegliere gli strumenti a schermo</h2>
+    <p>Nel menù in alto, sotto <em>Strumenti a schermo</em>, c'è una casella per ogni riquadro: velocità e vento, rosa dei venti, scotte e timone, carta ridotta, regata, traversata, incarico, rotta. Spegnendone uno sparisce, e quelli sotto di lui <strong>salgono a prendere il posto</strong> invece di lasciare il buco. Serve a due cose opposte: allenarsi a leggere le vele con il mare libero da numeri, o tenere solo la carta ridotta e il cronometro in una traversata lunga.</p>
+    <p>La <strong>carta ridotta</strong> in basso a destra si <strong>ingrandisce con la rotella</strong>, tenendoci sopra il cursore: da tutta la carta fino a dodici volte, e da lì in poi si stringe attorno alla barca, seguendola. Il fattore è scritto nell'angolo. Ingrandita mostra anche i porti, che a carta intera sarebbero venti puntini appiccicati alle coste.</p>
 <h2>La carta nautica</h2>
     <p><kbd>C</kbd> apre la carta a tutto schermo, con l'aspetto di una carta di navigazione vera: terre color sabbia, fascia di secche azzurra, reticolato in <strong>gradi e primi veri</strong> di latitudine e longitudine, rosa dei venti e scala grafica in miglia. Ci trovi tutti i porti col nome, le boe, la tua rotta tracciata e quella del fantasma.</p>
     <p>Trascina per spostare, rotella per ingrandire — <strong>due dita che si allargano</strong>

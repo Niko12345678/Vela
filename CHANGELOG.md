@@ -87,6 +87,41 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
   bordo lungo per primo, l'isola che sposta la scelta e quella che chiude
   tutte e due le strade, la regola dello strambare che paga su tutta la
   flotta, e la carta che disegna tutto senza NaN e senza muovere la barca.
+- **La carta ridotta si ingrandisce con la rotella.** In basso a destra ci
+  stavano 168 px per venticinque chilometri di Ionio: si vedeva la forma
+  dell'arcipelago e non si vedeva niente di quello che serve mentre si
+  naviga — da che parte è l'imboccatura, quanta acqua c'è fra la punta e la
+  secca. Tenendoci sopra il cursore la rotella la ingrandisce fino a dodici
+  volte, e da lì in poi l'inquadratura si stringe attorno alla barca e la
+  segue, senza mai scavallare i bordi del mondo (un pezzo di vista fuori
+  carta sarebbe mare bianco al posto delle terre). Boe e barchetta
+  rimpiccioliscono con lo zoom, perché sono segni e non oggetti, e dal
+  ×2,5 in su compaiono i porti, che a carta intera sarebbero venti puntini
+  appiccicati alle coste. Il fattore è scritto nell'angolo: una rotella che
+  fa qualcosa solo lì sopra, senza niente che lo dica, è un comando che si
+  scopre per sbaglio.
+- **Il ritmo di gioco da tastiera, e il 16×.** `+` e `−` salgono e scendono
+  di un gradino sulla stessa scaletta della tendina del menù, `0` riporta al
+  tempo reale. Era la cosa che si cambia più spesso — realtime per entrare
+  in porto, tutto il ritmo che c'è per attraversare un canale vuoto — ed era
+  l'unica che obbligava ad aprire il menù e cercare una tendina. La scaletta
+  arriva ora a **16×**: la fisica non se ne accorge perché `frame` sotto-passa
+  sul tempo *simulato* e non sul fotogramma, e la golden test lo verifica
+  confrontando la velocità a regime a 16× con quella a 1×.
+- **Ogni strumento si spegne per conto suo.** Nel menù, sotto *Strumenti a
+  schermo*, c'è una casella per riquadro: velocità e vento, rosa dei venti,
+  scotte e timone, carta ridotta, regata, traversata, incarico, rotta.
+  Servono due cose opposte e nessuna delle due si poteva fare: allenarsi a
+  leggere il colore delle vele senza i numeri sotto gli occhi, e tenere solo
+  cronometro e cartina in una traversata lunga. Spegnendone uno la colonna
+  di sinistra si **ricompatta** invece di lasciare il buco — un riquadro
+  spento che lascia il suo spazio vuoto è peggio del riquadro — e spenti gli
+  strumenti in alto la colonna comincia da sopra.
+- `test/strumenti.test.js`: la cartina che a zoom 1 inquadra esattamente
+  quello di sempre e ingrandita non esce dalla carta, la rotella che lì
+  sopra non tocca le scotte e sul mare continua a toccarle, i riquadri che
+  si spengono e la colonna che si ricompatta, i gradini del ritmo con i loro
+  fondo scala, e la scaletta `RITMI` confrontata con le opzioni del menù.
 
 ### Corretto
 - **La rotta consigliata adesso bordeggia, invece di puntare dentro il
@@ -136,6 +171,12 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
   continuare a rispondere.
 
 ### Cambiato
+- **`+` e `−` non sono più lo zoom della vista: sono il ritmo di gioco.** Lo
+  zoom si sistema una volta e resta lì; il ritmo si cambia in continuazione,
+  ed è quello che merita i due tasti che tutti trovano al buio. Lo zoom della
+  vista è passato su `Pag↑` `Pag↓` — che, a differenza del segno più, non
+  cambiano di posto con la disposizione della tastiera — e resta dov'era su
+  `Ctrl`+rotella.
 - **Il seme di partenza non è più "mantova".** Un valore fisso nel campo
   voleva dire che la prima carta casuale era sempre la stessa per tutti, e
   che chi non lo cambiava non capiva a cosa servisse quella parola. Adesso
