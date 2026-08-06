@@ -186,11 +186,46 @@ const boat={x:0,y:0,vx:0,vy:0,h:0,
   heel:0, luff:0, luffJ:0, aoa:0, aoaJ:0, balance:0, beta:0, grounded:0, wake:[]};
 const game={paused:false,auto:false,zoom:3.4,t:0,started:false,clock:0,next:0,done:null,
             msg:"",msgT:0, pilot:0, pilotTgt:0};
+
+/* ── quali strumenti si vedono ──
+   Gli strumenti coprono i quattro angoli dello schermo, e non tutti servono
+   sempre: chi si allena a regolare le vele vuole il mare libero, chi fa una
+   traversata lunga tiene la carta ridotta e butta via la regata. Ognuno si
+   spegne per conto suo, dalla tendina «Strumenti a schermo» del menù.
+   L'ordine è quello dei riquadri nel menù; le chiavi le usa anche drawHUD
+   per decidere cosa disegnare e, soprattutto, per non lasciare il buco di
+   quello che ha spento (la colonna di sinistra si ricompatta).            */
+const HUD_VOCI=[
+  ["strumenti","Velocità e vento"],
+  ["rosa","Rosa dei venti"],
+  ["scotte","Scotte e timone"],
+  ["cartina","Carta ridotta"],
+  ["regata","Regata"],
+  ["traversata","Traversata"],
+  ["incarico","Incarico"],
+  ["rotta","Rotta"]
+];
+const hud=Object.create(null);
+for(const [k] of HUD_VOCI) hud[k]=true;
+
+/* Zoom della carta ridotta in basso a destra: 1 è tutta la carta, come è
+   sempre stata; da lì in su si stringe attorno alla barca. Serve perché a
+   tutta carta lo Ionio sta in 168 px e le cale in cui si naviga davvero
+   sono grandi come la punta di uno spillo. */
+const mini={z:1};
+const MINI_LATO=168, MINI_ZMAX=12;
 let windBase=7, windDirBase=200*D2R, gusts=[], streaks=[];
 let assist=0.55;   // 0.55 = mare facile, 1 = pieno
 let streakVis=1;   // visibilità dei tratteggi del vento
+/* Scala del tempo: tutto accelera insieme, le proporzioni restano. La
+   scaletta è la stessa della tendina «Ritmo» del menù e dei tasti + e −,
+   così i due comandi non si contraddicono; `0` riporta al tempo reale.
+   Il 16× regge perché `frame` sotto-passa la fisica sul tempo simulato e
+   non sul fotogramma: a 16× di un dt già tagliato a 0,05 s vengono
+   quaranta sottopassi da 20 ms, gli stessi di sempre.                    */
+const RITMI=[1,1.5,2,3,4,6,8,12,16];
 let timeScale=2;
-let mapMode="ionio";   // scala del tempo: tutto accelera insieme, le proporzioni restano
+let mapMode="ionio";
 
 function resetBoat(){
   boat.x=world.start.x;boat.y=world.start.y;boat.vx=0;boat.vy=0;
@@ -686,7 +721,9 @@ function comando(k,shift){
   if(k==="l")toggleLog();
   if(k==="i")toggleCar();
   if(k==="c")toggleChart();
-  if(k==="0"&&chart.on)chartFit();
+  // sulla carta lo zero inquadra tutto; sul mare riporta al tempo reale,
+  // che è l'unico ritmo con un nome e quindi merita un tasto suo
+  if(k==="0"){ if(chart.on)chartFit(); else setRitmo(1); }
   // sulla carta si cancella la rotta: Canc toglie l'ultimo punto,
   // Maiusc+Canc l'intera linea. Fuori dalla carta non c'è niente da segnare
   if(chart.on&&(k==="backspace"||k==="delete")){
@@ -719,8 +756,15 @@ function comando(k,shift){
   }
   if(k==="n")newWorld(semeNuovo());
   if(k==="t"){game.auto=!game.auto;say(game.auto?"Regolazione vele AUTOMATICA":"Regolazione vele manuale");}
-  if(k==="+"||k==="=")game.zoom=clamp(game.zoom*1.25,1.1,9);
-  if(k==="-"||k==="_")game.zoom=clamp(game.zoom/1.25,1.1,9);
+  // + e − sono il ritmo di gioco: è quello che si cambia in continuazione —
+  // realtime per una manovra stretta, 12× per attraversare un canale vuoto —
+  // mentre lo zoom si sistema una volta e resta lì. Lo zoom della vista è
+  // rimasto su Pag↑ Pag↓ e su Ctrl+rotella, che non dipendono dalla
+  // disposizione della tastiera come fa il segno più.
+  if(k==="+"||k==="=")ritmoPasso(1);
+  if(k==="-"||k==="_")ritmoPasso(-1);
+  if(k==="pageup")game.zoom=clamp(game.zoom*1.25,1.1,9);
+  if(k==="pagedown")game.zoom=clamp(game.zoom/1.25,1.1,9);
   if(k==="k"){
     if(game.pilot>=2) say("Governa l'autotimoniere: Z per riprendere la barra");
     else{
@@ -788,6 +832,18 @@ function rotella(e){
     chart.z=clamp(chart.z*f,Math.min(VW,VH)*0.30/world.size,0.9);
     const q=c2w(e.offsetX!==undefined?e.offsetX:VW/2,e.offsetY!==undefined?e.offsetY:VH/2);
     chart.x+=p.x-q.x; chart.y+=p.y-q.y;
+    return;
+  }
+  // rotella sopra la carta ridotta: la ingrandisce, e la vista si stringe
+  // attorno alla barca. È il gesto che si fa già sulla carta grande, sullo
+  // stesso disegno in piccolo, e vale anche in panna e con Ctrl premuto —
+  // lì sotto non c'è nessuna scotta da regolare.
+  const ox=e.offsetX!==undefined?e.offsetX:-1, oy=e.offsetY!==undefined?e.offsetY:-1;
+  if(suCartina(ox,oy)){
+    // 0,9985 per pixel: uno scatto da 100 px vale un 16% di ingrandimento,
+    // così da tutta la carta al massimo ci vogliono una quindicina di
+    // scatti e non tre — sono 168 px, e saltarci dentro fa perdere il segno
+    mini.z=clamp(mini.z*Math.pow(0.9985,e.deltaY*u),1,MINI_ZMAX);
     return;
   }
   if(e.ctrlKey){                                           // ctrl+rotella = zoom della carta
@@ -1606,11 +1662,35 @@ function hudBox(){
   // la carta ridotta si disegna solo se ci sta davvero: nella colonna di
   // destra deve entrare tutta sotto la scritta del vento apparente, e col
   // telefono per il lungo quello spazio non c'è
-  const cartina=!stretto && fondo-(ry+rosa+40) > 196;
+  const cartina=hud.cartina && !stretto && fondo-(ry+rosa+40) > 196;
   return {hs,W,H,fondo,stretto,
           rosa,rx:W-(rosa+26),ry,
           bx:14,by:fondo-bh-14,bw,bh,              // scotte, bilanciamento e timone
           cartina};
+}
+
+/* Dove sta la carta ridotta, in pixel VERI di schermo — dentro drawHUD le
+   sue coordinate sono quelle finte di hudBox(), ma la rotella arriva con
+   quelle vere e le due si mescolano solo qui. Serve per sapere se lo
+   scatto è capitato sopra la cartina, che è il modo in cui la si zooma. */
+function cartinaRett(){
+  const box=hudBox();
+  if(!box.cartina) return null;
+  const l=MINI_LATO*box.hs;
+  return {x:(box.W-MINI_LATO-14)*box.hs, y:(box.fondo-MINI_LATO-14)*box.hs, l};
+}
+function suCartina(x,y){
+  const r=cartinaRett();
+  return !!r && x>=r.x && x<=r.x+r.l && y>=r.y && y<=r.y+r.l;
+}
+/* La scala della carta ridotta e il punto che ci sta in mezzo. A zoom 1 il
+   conto dà esattamente l'inquadratura di sempre — tutta la carta, centrata
+   sull'origine — e da lì in su si stringe attorno alla barca senza mai
+   uscire dai bordi del mondo. */
+function cartinaVista(){
+  const semi=world.size*1.06/(2*mini.z), lim=world.size*0.53-semi;
+  return {k:MINI_LATO/(2*semi),
+          cx:clamp(boat.x,-lim,lim), cy:clamp(boat.y,-lim,lim)};
 }
 
 function drawHUD(){
@@ -1624,6 +1704,7 @@ function drawHUD(){
 
   /* ── strumenti, in alto a sinistra */
   const px=14,py=14,pw=196,ph=126;
+  if(hud.strumenti){
   panel(px,py,pw,ph);
   label("VELOCITÀ",px+12,py+20);
   value(kn.toFixed(1),px+12,py+46,C("--chart"),26);
@@ -1641,8 +1722,10 @@ function drawHUD(){
   ctx.fillStyle=Math.abs(twa*R2D)<32?C("--warn"):C("--good");
   ctx.font="12px ui-monospace,monospace";ctx.textAlign="right";
   ctx.fillText(pointOfSail(twa),px+pw-12,py+112);
+  }
 
   /* ── rosa dei venti, in alto a destra */
+  if(hud.rosa){
   const cxr=box.rx, cyr=box.ry, R=box.rosa;
   ctx.save();ctx.translate(cxr,cyr);
   // rk: la rosa dei venti si rimpicciolisce tutta insieme sugli schermi
@@ -1694,8 +1777,10 @@ function drawHUD(){
   ctx.restore();
   ctx.fillStyle=C("--chart-dim");ctx.font="9px ui-monospace,monospace";ctx.textAlign="center";
   ctx.fillText("VENTO APP "+Math.round(Math.abs(boat.beta*R2D))+"°"+(boat.beta>0?" DRITTA":" SIN"),cxr,cyr+R+22*rk+8);
+  }
 
   /* ── regolazione / timone / sbandamento, in basso a sinistra */
+  if(hud.scotte){
   const bw=box.bw, bh=box.bh, bx=box.bx, by=box.by;
   panel(bx,by,bw,bh);
   const gw=bw-24, gx=bx+12;
@@ -1791,17 +1876,20 @@ function drawHUD(){
     ctx.fillText("VENTO "+Math.round(Math.abs(game.pilotTgt*R2D))+"° "+(game.pilotTgt>0?"DRITTA":"SIN"),gx+gw,by+164);}
   else{ctx.fillStyle=C("--chart-dim");ctx.fillText("SPENTO  ·  Z PER INSERIRE",gx+gw,by+164);}
   ctx.textAlign="left";
+  }
   /* ── carta ridotta, in basso a destra — su schermo stretto non ci sta e
      non si disegna: la carta intera è a un tasto (C) o a un pulsante */
   if(box.cartina){
-  const ms=168, mx=VW-ms-14, my2=box.fondo-ms-14;
+  const ms=MINI_LATO, mx=VW-ms-14, my2=box.fondo-ms-14;
   panel(mx,my2,ms,ms);
-  const k=ms/(world.size*1.06), c=world.size*0.53-0;
+  const vista=cartinaVista(), k=vista.k;
   ctx.save();ctx.beginPath();ctx.rect(mx,my2,ms,ms);ctx.clip();
-  ctx.translate(mx,my2);ctx.scale(k,k);ctx.translate(c,c);
+  ctx.translate(mx+ms/2,my2+ms/2);ctx.scale(k,k);ctx.translate(-vista.cx,-vista.cy);
   ctx.fillStyle="rgba(61,146,171,.30)";
   for(const is of world.islands){islandPath(is);ctx.fill();}
-  const mr=world.size/120;
+  // boe e barca rimpiccioliscono con lo zoom: sono segni, non oggetti, e
+  // devono restare grandi uguali sullo schermo mentre la carta si allarga
+  const mr=world.size/120/mini.z;
   world.marks.forEach((m,i)=>{
     ctx.fillStyle=i<game.next?C("--good"):(i===game.next?C("--accent"):"rgba(243,234,212,.35)");
     ctx.beginPath();ctx.arc(m.x,m.y,mr,0,TAU);ctx.fill();
@@ -1812,17 +1900,39 @@ function drawHUD(){
     piano.pts.forEach((p,j)=>j?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
     ctx.stroke();
   }
+  // i porti compaiono quando c'è lo spazio per distinguerli: a tutta carta
+  // sarebbero venti puntini appiccicati sopra le coste
+  if(mini.z>=2.5){
+    ctx.fillStyle="rgba(243,234,212,.45)";
+    for(const p of (world.ports||[])){ctx.beginPath();ctx.arc(p.x,p.y,mr*0.7,0,TAU);ctx.fill();}
+  }
   ctx.fillStyle=C("--chart");
   ctx.save();ctx.translate(boat.x,boat.y);ctx.rotate(boat.h);
-  const bs=world.size/40;
+  const bs=world.size/40/mini.z;
   ctx.beginPath();ctx.moveTo(0,-bs);ctx.lineTo(bs*0.6,bs*0.73);ctx.lineTo(-bs*0.6,bs*0.73);ctx.closePath();ctx.fill();
   ctx.restore();ctx.restore();
+  // il fattore di zoom in un angolo: senza, la rotella sulla cartina è un
+  // comando che non esiste finché non lo si trova per sbaglio
+  ctx.font="9px ui-monospace,monospace";ctx.textAlign="right";
+  ctx.fillStyle=mini.z>1?C("--accent"):"rgba(243,234,212,.35)";
+  ctx.fillText("×"+numIt(Math.round(mini.z*10)/10),mx+ms-5,my2+ms-5);
+  ctx.textAlign="left";
   }
+
+  /* ── la colonna di sinistra ──
+     Regata (quando non ci sta in alto), traversata, incarico e rotta si
+     impilano uno sotto l'altro. `colY` è il primo posto libero e scende
+     solo per i riquadri che si disegnano davvero: spegnendone uno dal menù
+     non deve restare il suo buco, e spegnendo gli strumenti la colonna
+     comincia da sopra. */
+  let colY=hud.strumenti ? py+ph+10 : py;
 
   /* ── regata, in alto a destra sotto la rosa */
   const ry=14, tw=176;
   const tp=VW-14-176-232 > 240 ? VW-14-176-232 : px;   // sotto gli strumenti se non c'è spazio
-  const ryy=tp===px ? py+ph+10 : ry;
+  const ryy=tp===px ? colY : ry;
+  if(hud.regata){
+  if(tp===px) colY+=74;
   panel(tp,ryy,tw,64);
   label("REGATA",tp+12,ryy+18);
   ctx.textAlign="left";
@@ -1849,12 +1959,12 @@ function drawHUD(){
       ctx.restore();
     }
   }
+  }
 
   /* ── traversata in corso */
-  if(voy&&voy.moving){
-    // sotto gli strumenti, e sotto la regata quando anche lei è finita a
-    // sinistra per mancanza di spazio: prima i due pannelli si sovrapponevano
-    const tw2=176, tx=14, ty=py+ph+10+(tp===px?74:0);
+  if(hud.traversata&&voy&&voy.moving){
+    const tw2=176, tx=14, ty=colY;
+    colY+=(voy.ghost?62:46)+10;
     panel(tx,ty,tw2,voy.ghost?62:46);
     label("TRAVERSATA",tx+12,ty+16);
     ctx.textAlign="right";ctx.font="10px ui-monospace,monospace";ctx.fillStyle=C("--chart-dim");
@@ -1878,10 +1988,10 @@ function drawHUD(){
   }
 
   /* ── incarico a bordo: dove va il carico e quanto tempo resta */
-  let hInc=0;
-  if(CARRIERA.attiva&&CARRIERA.incarico){
+  if(hud.incarico&&CARRIERA.attiva&&CARRIERA.incarico){
     const inc=CARRIERA.incarico, tw4=176, tx=14;
-    const ty=py+ph+10+(tp===px?74:0)+(voy&&voy.moving?(voy.ghost?62:46)+10:0);
+    const ty=colY;
+    colY+=62+10;
     panel(tx,ty,tw4,62);
     label("INCARICO",tx+12,ty+16);
     const resta=inc.limite-inc.t;
@@ -1911,17 +2021,13 @@ function drawHUD(){
       ctx.fillText(nm(Math.hypot(pd.x-boat.x,pd.y-boat.y)).toFixed(1)+" nm",tx+tw4-12,ty+52);
     }
     ctx.textAlign="left";
-    hInc=62+10;
   }
 
   /* ── rotta pianificata: il punto verso cui si va e quanto se ne è fuori */
-  if(piano.pts.length){
-    const tw3=176, tx=14;
-    let ty=py+ph+10;                                   // sotto gli strumenti
-    if(tp===px) ty+=74;                                // dove è finita anche la regata
-    if(voy&&voy.moving) ty+=(voy.ghost?62:46)+10;
-    ty+=hInc;                                          // e sotto l'incarico, quando c'è
+  if(hud.rotta&&piano.pts.length){
+    const tw3=176, tx=14, ty=colY;
     const arrivato=piano.i>=piano.pts.length;
+    colY+=(arrivato?46:62)+10;
     panel(tx,ty,tw3,arrivato?46:62);
     label("ROTTA",tx+12,ty+16);
     ctx.textAlign="right";ctx.font="10px ui-monospace,monospace";ctx.fillStyle=C("--chart-dim");
@@ -2154,8 +2260,49 @@ document.getElementById("mapsel").onchange=e=>{mapMode=e.target.value;e.target.b
 document.getElementById("gen").onclick=()=>{
   if(mapMode==="ionio"){mapMode="rnd";document.getElementById("mapsel").value="rnd";}
   newWorld(semeCorrente());say(world.name);};
-document.getElementById("tscale").onchange=e=>{timeScale=parseFloat(e.target.value);e.target.blur();
-  say("Ritmo di gioco "+e.target.value.replace(".",",")+"×");};
+/* Il ritmo si cambia da due parti — la tendina del menù e i tasti + − 0 —
+   e la tendina deve seguire i tasti, altrimenti resta lì a mostrare un
+   numero che non è più vero. Passano tutti e due di qui. */
+function numIt(v){ return String(v).replace(".",","); }
+function fmtRitmo(v){ return numIt(v)+"×"; }
+function ritmoIndice(){
+  let b=0;
+  for(let i=1;i<RITMI.length;i++)
+    if(Math.abs(RITMI[i]-timeScale)<Math.abs(RITMI[b]-timeScale))b=i;
+  return b;
+}
+function setRitmo(v,dillo){
+  timeScale=v;
+  const el=document.getElementById("tscale");
+  if(el)el.value=String(v);
+  if(dillo!==false)say("Ritmo di gioco "+fmtRitmo(v)+(v===1?" — tempo reale":""));
+}
+function ritmoPasso(d){
+  const i=clamp(ritmoIndice()+d,0,RITMI.length-1);
+  if(RITMI[i]===timeScale){
+    say("Ritmo di gioco "+fmtRitmo(timeScale)+(d>0?" — più veloce non si va":" — più lento non si va"));
+    return;
+  }
+  setRitmo(RITMI[i]);
+}
+document.getElementById("tscale").onchange=e=>{setRitmo(parseFloat(e.target.value));e.target.blur();};
+
+/* La tendina «Strumenti a schermo»: una casella per riquadro, costruite qui
+   invece che a mano nel foglio HTML perché l'elenco che conta è HUD_VOCI e
+   due elenchi da tenere in accordo sono un elenco di troppo. */
+const hudselEl=document.getElementById("hudsel");
+if(hudselEl){
+  for(const [k,t] of HUD_VOCI){
+    const l=document.createElement("label"), c=document.createElement("input"),
+          s=document.createElement("span");
+    c.type="checkbox";c.checked=true;c.id="hud-"+k;
+    c.onchange=e=>{hud[k]=e.target.checked;e.target.blur();
+      say(e.target.checked?t+": di nuovo a schermo":t+": nascosto — si riaccende dal menù");};
+    s.textContent=t;
+    l.appendChild(c);l.appendChild(s);
+    hudselEl.appendChild(l);
+  }
+}
 document.getElementById("vis").oninput=e=>{streakVis=parseFloat(e.target.value);};
 document.getElementById("winv").onchange=e=>{wheelInv=e.target.checked;e.target.blur();};
 document.getElementById("wstep").onchange=e=>{

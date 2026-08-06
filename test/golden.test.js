@@ -176,10 +176,14 @@ test("la scala temporale non altera la simulazione", async () => {
       tick(Math.round(9000 / ts));
       return Math.hypot(boat.vx, boat.vy) * 1.94384;
     };
-    report({ x1: prova(1), x2: prova(2), x6: prova(6) });
+    report({ x1: prova(1), x2: prova(2), x6: prova(6), x16: prova(16) });
   `);
   close(r.x2, r.x1, 0.05, "ritmo 2× contro 1×");
   close(r.x6, r.x1, 0.05, "ritmo 6× contro 1×");
+  // il 16× è il gradino più alto della scaletta: se un giorno la fisica
+  // cominciasse a sgranarsi con tanto tempo simulato in un fotogramma,
+  // è qui che si vede, prima che lo veda chi gioca
+  close(r.x16, r.x1, 0.05, "ritmo 16× contro 1×");
 });
 
 test("il gioco parte, gira e non produce NaN", async () => {
