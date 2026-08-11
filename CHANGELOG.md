@@ -145,6 +145,52 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
   fondo scala, e la scaletta `RITMI` confrontata con le opzioni del menù.
 
 ### Corretto
+- **Le boline consigliate erano più strette di quelle che la barca sa
+  percorrere.** Chi seguiva una rotta consigliata se ne accorgeva subito:
+  la linea sulla carta non si teneva: per starci sopra bisognava stringere
+  oltre l'angolo di bolina, le vele smettevano di tirare, e ci si trovava a
+  fare la strada a lato del tratteggio senza capire perché. Il conto era
+  giusto e il disegno sbagliato — o meglio, i due parlavano di due cose
+  diverse. Il polare della barca risolve l'equilibrio velico e sa
+  benissimo che la deriva regge la forza laterale delle vele solo
+  scivolando un po': lo **scarroccio**, che di bolina stretta vale una
+  decina di gradi e sul gozzo arriva a venti. Quel numero c'era già dentro
+  `polarSpeed`, e veniva buttato via: si teneva solo il modulo della
+  velocità. Poi la pianificazione prendeva l'angolo di *prua* di massima
+  VMG e ci disegnava sopra la *strada*, come se la barca andasse dove
+  punta. Ogni bordo nasceva così dieci gradi più stretto del vero, e la
+  rotta che ne usciva era una rotta di carta.
+  Ora `polarSolve` restituisce anche lo scarroccio, e le due cose stanno
+  separate dappertutto: `andature()` dà per ogni andatura la `prua` da
+  tenere alla barra e la `twa` della **scia**, cioè della strada che si fa.
+  Il massimo di VMG si cerca sulla scia (è lì che si guadagna al vento, non
+  sulla prua), la geometria dei bordi e i punti del consiglio si costruiscono
+  sulla scia, e la prua compare solo dove si scrive un numero di bussola a
+  chi sta al timone — dove prima, sulla tratta diretta, si scriveva
+  addirittura il rilevamento, che è la strada e non la prua. Un collaudo
+  nuovo chiude il cerchio dalla parte che conta: mette la barca sulla prua
+  consigliata, la lascia navigare col pilota, e verifica che la scia che ha
+  fatto davvero sia quella disegnata sulla carta.
+  Ne discendono due cose, ed è giusto che si vedano. Le andature restano
+  quelle di *quel* polare, ma il confronto fra gli scafi ora si legge sulla
+  scia: a 8 m/s il gozzo e la barca da regata tengono la stessa prua e
+  arrivano in due posti diversi (66° contro 55° dal vento), che è poi
+  l'unica differenza che conti fra rimontare il vento e farsi portare
+  sottovento mentre ci si prova. E bordeggiare in un canale ora chiede più
+  virate, perché ogni bordo guadagna meno: il tetto per tratta è salito da
+  16 a 32, perché quando lo si toccava l'ultimo pezzo restava in mano come
+  una tratta dritta dentro il vento.
+- **Una rotta consigliata poteva ancora passare sopra uno scoglio.** Il
+  controllo dei salti sulla griglia ha una scorciatoia che vale oro: se la
+  distanza dalla costa dei due capi copre la lunghezza del salto, in mezzo
+  non ci può essere niente, e non serve andare a campionare. Il guaio è che
+  `landDepth` non guarda nemmeno le isole a più di 400 m dal proprio
+  riquadro — per velocità — quindi al largo restituisce la distanza
+  dell'isola che ha visto, non della più vicina in assoluto. Un nodo a
+  «tre chilometri dalla costa» faceva passare la scorciatoia sempre, e il
+  controllo vero non veniva mai fatto: proprio sui salti lunghi, che sono
+  quelli capaci di mangiarsi un promontorio. Ora quella distanza si ferma a
+  400 m, che è il punto oltre il quale non è più un numero di cui fidarsi.
 - **La rotta consigliata adesso bordeggia, invece di puntare dentro il
   vento.** Era una scelta di progetto sbagliata, non un caso limite: avevo
   deciso che il consiglio rispondesse solo alla domanda *da che parte passo*

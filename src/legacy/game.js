@@ -70,11 +70,21 @@ function mkIsland(pts,name){
 }
 
 /* Distanza con segno dalla costa: positiva a terra, negativa in mare.
-   Serve sia per l'incaglio sia per posizionare le boe.                 */
+   Serve sia per l'incaglio sia per posizionare le boe.
+
+   Un'isola oltre `LAND_VISTA` dal proprio riquadro non viene nemmeno
+   guardata, e questo rende il numero **esatto solo da vicino**: sotto i
+   400 m nessuna costa può sfuggire, sopra il valore è quello dell'isola
+   che si è vista, non della più vicina in assoluto. Chi lo usa come
+   distanza vera — e non solo per dire "qui c'è terra" — deve fermarsi lì:
+   fidarsene alla larga ha già fatto passare una rotta consigliata sopra
+   uno scoglio.                                                          */
+const LAND_VISTA=400;
 function landDepth(islands,x,y){
   let best=-1e9;
   for(const is of islands){
-    if(x<is.x0-400||x>is.x1+400||y<is.y0-400||y>is.y1+400) continue;
+    if(x<is.x0-LAND_VISTA||x>is.x1+LAND_VISTA||
+       y<is.y0-LAND_VISTA||y>is.y1+LAND_VISTA) continue;
     const p=is.p, n=p.length>>1;
     let d2=1e18, inside=false;
     for(let i=0,j=n-1;i<n;j=i++){
@@ -358,8 +368,15 @@ function bestTrim(beta,maxT,narrow){
 }
 /* Polare teorico della barca: risolve l'equilibrio fra spinta velica e
    resistenza dello scafo senza far girare la simulazione. Serve come
-   metro di paragone per il polare personale del giornale di bordo.   */
-function polarSpeed(twaDeg,wind){
+   metro di paragone per il polare personale del giornale di bordo.
+
+   Restituisce due cose, e tenerle distinte è tutto il punto: la velocità
+   sull'acqua e lo **scarroccio**, cioè di quanto la scia esce di lato
+   rispetto alla prua. La barca non va dove ha la prua: la deriva regge la
+   forza laterale delle vele solo scivolando un po', e alle andature
+   strette quello scarto vale una decina di gradi. Chi disegna una rotta
+   deve usare la scia; la prua serve solo a chi sta alla barra.        */
+function polarSolve(twaDeg,wind){
   const twa=Math.abs(twaDeg)*D2R;
   let vf=1.5, vl=0;
   for(let it=0;it<50;it++){
@@ -387,9 +404,11 @@ function polarSpeed(twaDeg,wind){
     vf+=((lo+hi)/2-vf)*0.5;
     vl+=(Math.sign(Fl)*(l2+h2)/2-vl)*0.5;                          // scarroccio
   }
-  return Math.max(0,Math.hypot(vf,vl));
-  return Math.max(0,v);
+  const v=Math.hypot(vf,vl);
+  return {v:Math.max(0,v),
+          sco:vf>1e-6?Math.abs(Math.atan2(vl,vf)):0};   // sempre sottovento, quindi in valore assoluto
 }
+function polarSpeed(twaDeg,wind){ return polarSolve(twaDeg,wind).v; }
 
 function trimWindows(){
   boat.wM=bestTrim(boat.beta,90*D2R,false);
@@ -2449,9 +2468,19 @@ function drawPiano(z){
 
    Le due andature buone non sono scelte a mano: si trovano massimizzando
    la **VMG**, la componente della velocità nella direzione utile, sul
-   polare teorico della barca — lo stesso `polarSpeed` del giornale. Sono
+   polare teorico della barca — lo stesso `polarSolve` del giornale. Sono
    quindi le andature di *quello* scafo con *quel* vento: il gozzo stringe
    meno del cutter e si vede nel disegno, e con poco vento si poggia.
+
+   Ogni andatura porta **due** angoli e vanno tenuti separati, perché la
+   barca non va dove ha la prua: `prua` è quello che si tiene alla barra,
+   `twa` è quello della scia, più aperto di tutto lo scarroccio — al
+   traverso due gradi, di bolina stretta anche quindici. Il disegno sulla
+   carta è fatto di strada percorsa, quindi la geometria dei bordi usa
+   sempre la scia; la prua compare solo dove si scrive un numero di
+   bussola a chi sta al timone. Confonderli disegna boline più strette di
+   quelle che la barca sa davvero percorrere — che è esattamente il modo
+   in cui una rotta consigliata diventa impossibile da seguire.
 
    Il polare costa: risolvere l'equilibrio velico è ~0,8 ms e la ricerca ne
    chiede una settantina. Per questo i risultati stanno in due memorie a
@@ -2468,25 +2497,70 @@ const BORDI_ACQUA=60;      // margine dalla costa sotto cui un bordo è "sulla t
 const polarMemo=new Map(), andatureMemo=new Map();
 const bordiChiave=vento=>barcaId+"|"+(Math.round(vento*2)/2);
 
+/* La soluzione del polare a una prua, tenuta in memoria: `{v, sco}`. */
 function polarMemo1(twaDeg,vento){
   const k=bordiChiave(vento)+"|"+(Math.round(twaDeg*2)/2);
   let v=polarMemo.get(k);
   if(v===undefined){
     if(polarMemo.size>4000)polarMemo.clear();
-    v=polarSpeed(twaDeg,vento);polarMemo.set(k,v);
+    v=polarSolve(twaDeg,vento);polarMemo.set(k,v);
+  }
+  return v;
+}
+const polarV=(twaDeg,vento)=>polarMemo1(twaDeg,vento).v;
+/* L'angolo della scia con la prua a `twaDeg`: sempre più aperto, perché
+   scarrocciare allontana dal vento. Sopra i 180° non si va: lì la scia è
+   sull'asse del vento e lo scarroccio è nullo comunque.               */
+function polarTwa(twaDeg,vento){
+  return Math.min(180,Math.abs(twaDeg)+polarMemo1(twaDeg,vento).sco*R2D);
+}
+/* Il contrario: la prua da tenere perché la scia esca a `twaDeg`. Lo
+   scarroccio dipende dalla prua e non dalla scia, quindi si gira due
+   volte sul posto — converge subito, perché su qualche grado di prua
+   cambia di pochi decimi.                                             */
+function polarPrua(twaDeg,vento){
+  const t=Math.abs(twaDeg);
+  let p=t;
+  for(let i=0;i<3;i++) p=clamp(t-polarMemo1(p,vento).sco*R2D,1,180);
+  return p;
+}
+/* La prua da tenere su un bordo la cui scia è `rotta`, col vento da `da`:
+   si punta più su della strada che si fa, dalla parte da cui soffia. */
+const bordiPrua=(rotta,twa,sco)=>norm(rotta+(twa>=0?sco:-sco));
+/* La velocità di una tratta di cui si conosce la scia e non la prua. È la
+   stessa cosa di `polarV` presa dall'altro capo, ma ha una memoria sua
+   perché la griglia del consiglio ne chiede decine di migliaia e ognuna
+   costerebbe le tre passate di `polarPrua`.                            */
+const polarSciaMemo=new Map();
+function polarScia(twaDeg,vento){
+  const k=bordiChiave(vento)+"|"+(Math.round(Math.abs(twaDeg)*2)/2);
+  let v=polarSciaMemo.get(k);
+  if(v===undefined){
+    if(polarSciaMemo.size>4000)polarSciaMemo.clear();
+    v=polarV(polarPrua(twaDeg,vento),vento);polarSciaMemo.set(k,v);
   }
   return v;
 }
 /* L'andatura di massima VMG dentro un settore: `verso` +1 guadagna al
    vento, −1 sottovento. Le curve di VMG hanno un massimo solo in questi
-   settori, quindi la passata grossolana non può perderlo di vista.   */
+   settori, quindi la passata grossolana non può perderlo di vista.
+
+   Si cerca sulle prue, ma il guadagno si misura sulla scia: è la VMG che
+   la barca fa davvero, non quella che farebbe se la deriva non
+   scivolasse. Il massimo si sposta di conseguenza — con la prua un po'
+   più poggiata, che è poi quello che fa un timoniere quando la barca non
+   avanza.                                                             */
 function vmgMax(vento,a0,a1,verso){
   let best=-1e9, ang=a0;
-  const prova=a=>{const g=polarMemo1(a,vento)*verso*Math.cos(a*D2R); if(g>best){best=g;ang=a;}};
+  const prova=a=>{
+    const g=polarV(a,vento)*verso*Math.cos(polarTwa(a,vento)*D2R);
+    if(g>best){best=g;ang=a;}
+  };
   for(let a=a0;a<=a1+1e-9;a+=3) prova(a);
   const c=ang;
   for(let a=Math.max(a0,c-3);a<=Math.min(a1,c+3)+1e-9;a+=0.5) prova(a);
-  return {twa:ang*D2R, v:polarMemo1(ang,vento), vmg:Math.abs(best)};
+  return {prua:ang*D2R, twa:polarTwa(ang,vento)*D2R,
+          v:polarV(ang,vento), vmg:Math.abs(best)};
 }
 function andature(vento){
   const k=bordiChiave(vento);
@@ -2539,19 +2613,27 @@ function bordiPer(ax,ay,bx,by,da,spd){
   const A=andature(spd);
   const stretta=at<A.bolina.twa, larga=at>A.poppa.twa;
   const out={fonte:"punto",bersaglio:{x:bx,y:by},ril,dist,twa,vento:{da,spd}};
-  const vDir=polarMemo1(at*R2D,spd);                 // quanto rende la linea diretta
+  // sulla linea diretta la SCIA è il rilevamento: la prua da tenere è più
+  // stretta di tutto lo scarroccio, ed è quella che rende `vDir`
+  const pDir=polarPrua(at*R2D,spd), scoDir=at-pDir*D2R;
+  const vDir=polarV(pDir,spd);                       // quanto rende la linea diretta
   out.vDiretta=vDir; out.tDiretta=vDir>0.02?dist/vDir:Infinity;
   const diretta=()=>{
-    out.tipo="diretta"; out.twaOtt=at; out.v=vDir; out.guadagno=0;
+    // `twaOtt` è l'angolo al vento della PRUA: è quello che si legge a
+    // bordo sugli strumenti, e sta insieme alla rotta scritta nei rami
+    out.tipo="diretta"; out.twaOtt=pDir*D2R; out.twaScia=at;
+    out.v=vDir; out.guadagno=0;
     out.hD=out.hS=ril; out.totale=dist; out.t=out.tDiretta; out.allunga=1;
     out.altra=null;
-    out.scelta={mure:twa>=0?"dritta":"sinistra",vertice:null,
-                rami:[{rotta:ril,lung:dist,mure:twa>=0?"dritta":"sinistra",twa:at,v:vDir}],
+    const m=twa>=0?"dritta":"sinistra";
+    out.scelta={mure:m,vertice:null,
+                rami:[{rotta:bordiPrua(ril,twa,scoDir),scia:ril,lung:dist,
+                       mure:m,twa:at,v:vDir}],
                 terra:bordoSullaTerra(ax,ay,bx,by)};
     return out;
   };
   if(!stretta&&!larga)return diretta();
-  const A2=stretta?A.bolina:A.poppa, opt=A2.twa, v=A2.v;
+  const A2=stretta?A.bolina:A.poppa, opt=A2.twa, v=A2.v, sco=opt-A2.prua;
   const hD=norm(da-opt), hS=norm(da+opt);      // mure a dritta: il vento da dritta, cioè twa>0
   const uD=dv(hD), uS=dv(hS);
   const det=uD.x*uS.y-uD.y*uS.x;
@@ -2562,7 +2644,8 @@ function bordiPer(ax,ay,bx,by,da,spd){
   // sottovento la diretta è una scelta, non un ripiego: se i bordi non
   // guadagnano tempo vero, il piano è non farli
   if(larga&&!(t<out.tDiretta*(1-BORDI_PAGA))){const d=diretta();d.pari=true;return d;}
-  out.tipo=stretta?"bolina":"poppa"; out.twaOtt=opt; out.v=v; out.vmg=A2.vmg;
+  out.tipo=stretta?"bolina":"poppa";
+  out.twaOtt=A2.prua; out.twaScia=opt; out.v=v; out.vmg=A2.vmg;
   out.hD=hD; out.hS=hS;
   out.totale=totale; out.t=t; out.allunga=totale/dist;
   out.guadagno=out.tDiretta-t;
@@ -2571,7 +2654,8 @@ function bordiPer(ax,ay,bx,by,da,spd){
                            :[{u:uS,l:lS,h:hS,m:"sinistra"},{u:uD,l:lD,h:hD,m:"dritta"}];
     const vx=ax+p[0].u.x*p[0].l, vy=ay+p[0].u.y*p[0].l;
     return {mure,vertice:{x:vx,y:vy},
-            rami:p.map(q=>({rotta:q.h,lung:q.l,mure:q.m,twa:opt,v})),
+            rami:p.map(q=>({rotta:bordiPrua(q.h,q.m==="dritta"?1:-1,sco),
+                            scia:q.h,lung:q.l,mure:q.m,twa:opt,v})),
             terra:bordoSullaTerra(ax,ay,vx,vy)||bordoSullaTerra(vx,vy,bx,by)};
   };
   const opz=[opzione("dritta"),opzione("sinistra")];
@@ -2702,7 +2786,10 @@ function drawBordiPannello(bp,S){
   const righe=[];
   if(bp.tipo==="diretta"){
     righe.push(["BORDI · DI FILATA",CHART.ink]);
-    righe.push([bordiGradi(bp.ril)+" · "+Math.round(Math.abs(bp.twa)*R2D)+"° AL VENTO "+
+    // la rotta scritta è quella da tenere alla barra, non il rilevamento:
+    // per far strada lungo la congiungente si punta un po' più su
+    righe.push([bordiGradi(bp.scelta.rami[0].rotta)+" · "+
+                Math.round(bp.twaOtt*R2D)+"° AL VENTO "+
                 (bp.twa>=0?"DA DRITTA":"DA SINISTRA"),CHART.dim]);
     righe.push([nm(bp.dist).toFixed(2)+" nm · "+kn(bp.v)+" · "+fmtT(bp.t).split(".")[0],CHART.ink]);
     if(bp.pari)righe.push(["IN POPPA STRAMBARE NON PAGA: TIENI LA DIRETTA",CHART.dim]);
@@ -2795,7 +2882,7 @@ function velocitaUtile(twa,spd){
   spd=Math.max(1,Math.round(spd));
   const at=Math.abs(norm(twa)), A=andature(spd);
   if(at<A.bolina.twa) return A.bolina.vmg/Math.max(Math.cos(at),1e-6);
-  const v=polarMemo1(at*R2D,spd);
+  const v=polarScia(at*R2D,spd);
   if(at>A.poppa.twa) return Math.max(v,A.poppa.vmg/Math.max(-Math.cos(at),1e-6));
   return v;
 }
@@ -2854,11 +2941,15 @@ function consGriglia(ax,ay,bx,by,marg){
   const nav=new Uint8Array(nx*ny);
   // di ogni nodo si tiene anche QUANTA acqua ha attorno: è la distanza
   // dalla costa più vicina, e serve a dire se il salto fino al nodo
-  // accanto può incontrare terra senza doverla andare a cercare
+  // accanto può incontrare terra senza doverla andare a cercare.
+  // Si ferma a `LAND_VISTA` perché oltre quella `landDepth` non è più una
+  // distanza vera (vede solo le isole vicine), e prendere per buono un
+  // "sono a tre chilometri dalla costa" faceva saltare il controllo
+  // proprio sui salti lunghi, cioè quelli che uno scoglio se lo mangiano
   const prof=new Float32Array(nx*ny);
   for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){
     const d=-landDepth(isl,x0+i*passo,y0+j*passo);
-    prof[j*nx+i]=d;
+    prof[j*nx+i]=Math.min(d,LAND_VISTA);
     nav[j*nx+i]=d>CONS_ACQUA?1:0;
   }
   return {x0,y0,nx,ny,passo,nav,prof,
@@ -3004,7 +3095,12 @@ function consScaletta(pts,passo,toll){
    dritta ed è segnata come troppo stretta: lì non ci si va a vela, e dirlo
    è meglio che disegnare una rotta che manda in panne.                  */
 const CONS_BORDO=2600;       // lunghezza massima di un bordo: oltre, si vira comunque
-const CONS_PASSI_MAX=16;     // e quante virate al massimo per una tratta sola
+// quante virate al massimo per una tratta sola. Sta qui per non lasciare
+// il bordeggio a girare in tondo, ma va tenuto largo: dentro un canale i
+// bordi sono corti e ognuno guadagna poco, e un tetto raggiunto lascia in
+// mano l'ultimo pezzo come una tratta dritta dentro il vento — cioè
+// esattamente il consiglio che non si vuole dare
+const CONS_PASSI_MAX=32;
 const CONS_BORDO_MIN=80;     // sotto, non è un bordo: è un tentativo di girarsi
 const CONS_USCITA=400;       // sotto, una tratta stretta è l'uscita da un porto, non un consiglio
 const CONS_PINZA=8*Math.PI/180;   // di quanto si può stringere sopra l'ottimo senza che sia un problema
@@ -3031,7 +3127,12 @@ function consAcquaAvanti(x,y,h,max,salta){
    mure sbilanciate quando la terra è da una parte sola.
 
    Vale nello stesso modo per la bolina e per la poppa: cambia solo quale
-   dei due limiti dell'andatura si sta toccando.                         */
+   dei due limiti dell'andatura si sta toccando.
+
+   I punti che escono di qui sono posti in mare, quindi il limite è quello
+   della **scia**: un bordo disegnato all'angolo di prua sarebbe più
+   stretto della strada che la barca sa fare, e chi lo segue si trova a
+   dover puntare dentro il vento per tenere la linea.                    */
 function consZigzag(ax,ay,bx,by,from,spd,capoA,capoB){
   const A=andature(spd);
   const at0=Math.abs(norm(from-angOf(bx-ax,by-ay)));
