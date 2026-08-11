@@ -14,6 +14,13 @@ paths:
   in poppa. La fascia verde degli strumenti è calcolata da `bestTrim()`,
   che massimizza la spinta in avanti sul modello vero. Non reintrodurre
   finestre a incidenza fissa.
+- **La barca non va dove ha la prua.** Fra prua e scia c'è lo scarroccio:
+  due gradi al traverso, dieci di bolina stretta, venti sul gozzo.
+  `polarSolve` restituisce tutti e due (`v` e `sco`) e `andature()` li
+  tiene distinti (`prua` e `twa`). Tutto quello che è geometria sulla carta
+  — bordi, punti di rotta, laylines — va sulla **scia**; la prua serve solo
+  a scrivere una rotta bussola a chi sta al timone. Confonderli disegna
+  rotte che non si possono navigare, ed è già successo.
 - `game.pilot`: 0 barra libera, 1 richiamo al centro, 2 rotta bussola,
   3 angolo del vento. È già cambiata una volta e ha rotto due test.
 - Scala geografica **1:6** (`SCALE_GEO`): le miglia mostrate sono quelle

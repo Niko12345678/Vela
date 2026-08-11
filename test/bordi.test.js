@@ -45,7 +45,9 @@ test("controvento la spezzata chiude sul bersaglio, e costa più della diretta",
     const p = bordiPer(0, 0, 0, -3000, 0, 7);
     const chiude = o => {
       const v = o.vertice, b = { x: 0, y: -3000 };
-      const d1 = dv(o.rami[0].rotta), d2 = dv(o.rami[1].rotta);
+      // la geometria si chiude sulla SCIA, non sulla prua: la barca fa
+      // strada dove scarroccia, non dove punta
+      const d1 = dv(o.rami[0].scia), d2 = dv(o.rami[1].scia);
       return Math.max(
         Math.hypot(v.x - d1.x*o.rami[0].lung, v.y - d1.y*o.rami[0].lung),
         Math.hypot(v.x + d2.x*o.rami[1].lung - b.x, v.y + d2.y*o.rami[1].lung - b.y));
@@ -106,11 +108,17 @@ test("sottovento si stramba solo se si guadagna tempo davvero", async () => {
 test("l'angolo scelto è davvero il massimo della VMG", async () => {
   const r = await runInGame(`
     ${MONDO}
+    // la VMG vera è la velocità dell'andatura proiettata sull'angolo della
+    // SCIA: la barca guadagna al vento lungo la strada che percorre, non
+    // lungo quella che punta. Cercare il massimo sul coseno della prua dà
+    // un angolo più stretto di quello che la barca sa davvero tenere
     const prova = (vento) => {
       const a = andature(vento);
-      const vmg = (t, s) => polarSpeed(t, vento) * s * Math.cos(t * D2R);
-      const b = a.bolina.twa * R2D, p = a.poppa.twa * R2D;
+      const vmg = (t, s) => polarSpeed(t, vento) * s
+                          * Math.cos(polarTwa(t, vento) * D2R);
+      const b = a.bolina.prua * R2D, p = a.poppa.prua * R2D;
       return { bolina: b, poppa: p,
+               scia: { bolina: a.bolina.twa * R2D, poppa: a.poppa.twa * R2D },
                bolinaMax: [-8,-4,4,8].every(d => vmg(b+d, 1) <= vmg(b, 1) + 1e-9),
                poppaMax:  [-8,-4,4,8].every(d => vmg(p+d,-1) <= vmg(p,-1) + 1e-9) };
     };
@@ -120,6 +128,11 @@ test("l'angolo scelto è davvero il massimo della VMG", async () => {
   for (const [nome, v] of Object.entries(r)) {
     assert.ok(v.bolinaMax, `${nome}: nessun angolo vicino stringe meglio (${v.bolina}°)`);
     assert.ok(v.poppaMax, `${nome}: nessun angolo vicino scende meglio (${v.poppa}°)`);
+    // la scia è sempre più aperta della prua: lo scarroccio non regala niente
+    assert.ok(v.scia.bolina > v.bolina + 3,
+      `${nome}: di bolina si scarroccia (prua ${v.bolina}°, scia ${v.scia.bolina}°)`);
+    assert.ok(v.scia.poppa >= v.poppa,
+      `${nome}: e in poppa la scia non stringe (prua ${v.poppa}°, scia ${v.scia.poppa}°)`);
   }
   assert.ok(r.leggero.bolina > r.fresco.bolina - 1e-9,
     `con poco vento non si stringe più che col fresco (${r.leggero.bolina}° vs ${r.fresco.bolina}°)`);
@@ -133,7 +146,8 @@ test("ogni scafo ha i suoi angoli, e nessuno consiglia uno zigzag inutile", asyn
       setBarca(id);
       out[id] = [4, 8, 14].map(vento => {
         const a = andature(vento), p = bordiPer(0, 0, 0, 3000, 0, vento);
-        return { vento, bolina: a.bolina.twa * R2D, poppa: a.poppa.twa * R2D,
+        return { vento, bolina: a.bolina.prua * R2D, poppa: a.poppa.prua * R2D,
+                 scia: a.bolina.twa * R2D,
                  tipo: p.tipo, pari: !!p.pari, t: p.t, tDiretta: p.tDiretta };
       });
     }
@@ -144,6 +158,10 @@ test("ogni scafo ha i suoi angoli, e nessuno consiglia uno zigzag inutile", asyn
     for (const c of casi) {
       assert.ok(c.bolina > 30 && c.bolina < 60, `${id} a ${c.vento} m/s: bolina ${c.bolina}°`);
       assert.ok(c.poppa > 120 && c.poppa <= 180, `${id} a ${c.vento} m/s: poppa ${c.poppa}°`);
+      // la strada che si fa è sempre più aperta della prua, e resta in un
+      // campo che una barca a vela riconosce: nessuno rimonta a 40° veri
+      assert.ok(c.scia > c.bolina + 3 && c.scia < 75,
+        `${id} a ${c.vento} m/s: scia di bolina ${c.scia}° (prua ${c.bolina}°)`);
       // sottovento la diretta si tiene sempre: o si guadagna tempo, o si tiene lei
       if (c.tipo === "poppa") assert.ok(c.t < c.tDiretta * 0.99,
         `${id} a ${c.vento} m/s: strambare guadagna tempo vero`);
@@ -152,8 +170,63 @@ test("ogni scafo ha i suoi angoli, e nessuno consiglia uno zigzag inutile", asyn
     assert.ok(casi[2].bolina < casi[0].bolina,
       `${id}: col vento fresco si stringe di più (${casi[0].bolina}° → ${casi[2].bolina}°)`);
   }
-  assert.ok(r.regata12[1].bolina < r.gozzo[1].bolina,
-    `la barca da regata stringe più del gozzo (${r.regata12[1].bolina}° vs ${r.gozzo[1].bolina}°)`);
+  // il confronto va fatto sulla scia: con la stessa prua, la barca da
+  // regata scarroccia molto meno del gozzo, ed è tutta lì la differenza
+  // fra rimontare il vento e farsi portare sottovento mentre ci si prova
+  assert.ok(r.regata12[1].scia < r.gozzo[1].scia,
+    `la barca da regata stringe più del gozzo (${r.regata12[1].scia}° vs ${r.gozzo[1].scia}°)`);
+});
+
+/* Questo è il collaudo che manca(va): un bordo disegnato non serve a
+   niente se la barca non lo può percorrere. Si mette la barca sulla prua
+   consigliata, la si lascia andare col pilota su rotta, e si guarda la
+   strada che ha fatto davvero: dev'essere quella disegnata sulla carta,
+   non una linea più aperta di dieci gradi. È il modo in cui si vede da
+   fuori la differenza fra prua e scia — e la ragione per cui le due cose
+   sono tenute separate in `andature()`. */
+test("il bordo disegnato è quello che la barca percorre davvero", async () => {
+  const r = await runInGame(`
+    ${MONDO}
+    world.size = 90000;
+    const out = [];
+    for (const vento of [5, 12]) {
+      windBase = vento; windDirBase = 0; gusts = []; streaks = []; game.t = 0;
+      // il piano per andare dritto sopravvento: esce per forza bordeggiato
+      const p = bordiPer(0, 0, 0, -9000, 0, vento);
+      const ramo = p.scelta.rami[0];
+      boat.x = 0; boat.y = 0; boat.h = ramo.rotta;
+      // con l'abbrivio che il piano promette: da ferma la barca pinza e si
+      // ferma in panne, ed è una prova sul timoniere, non sulla rotta
+      const u = dv(ramo.rotta); boat.vx = u.x * p.v; boat.vy = u.y * p.v;
+      boat.heel = 0; boat.yawRate = 0; boat.stuck = 0; boat.gtime = 0;
+      boat.spi = false; boat.jibFurled = false; boat.jibBack = false; boat.reef = 0;
+      game.auto = true; game.pilot = 2; game.pilotTgt = ramo.rotta; game.msgT = 99;
+      let mx = 0, my = 0;
+      for (let i = 0; i < 400 * 50; i++) {
+        trimWindows(); autopilot(0.02); physics(0.02); game.t += 0.02;
+        if (i === 200 * 50) { mx = boat.x; my = boat.y; }   // il transitorio di partenza non conta
+      }
+      const dx = boat.x - mx, dy = boat.y - my;
+      out.push({ vento, tipo: p.tipo,
+                 scia: Math.abs(norm(0 - ramo.scia)) * R2D,       // vento da nord
+                 prua: Math.abs(norm(0 - ramo.rotta)) * R2D,
+                 fatta: Math.abs(norm(0 - angOf(dx, dy))) * R2D,
+                 strada: Math.hypot(dx, dy) });
+    }
+    report(out);
+  `);
+
+  for (const c of r) {
+    assert.equal(c.tipo, "bolina", `${c.vento} m/s: dritto al vento si bordeggia`);
+    assert.ok(c.strada > 200, `${c.vento} m/s: la barca è partita davvero (${c.strada.toFixed(0)} m in 200 s)`);
+    // la strada fatta è quella disegnata, a meno di quel che si perde alla
+    // barra: quello che NON deve succedere è che il disegno stringa più
+    // della barca, perché quella linea non si potrebbe seguire
+    assert.ok(c.fatta < c.scia + 6,
+      `${c.vento} m/s: la scia vera non è più aperta del disegno (${c.fatta.toFixed(1)}° vs ${c.scia.toFixed(1)}°)`);
+    assert.ok(c.fatta > c.prua + 2,
+      `${c.vento} m/s: e resta più aperta della prua, perché si scarroccia (${c.fatta.toFixed(1)}° vs ${c.prua.toFixed(1)}°)`);
+  }
 });
 
 test("con mare libero si fa per primo il bordo lungo", async () => {

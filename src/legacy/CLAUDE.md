@@ -3,7 +3,7 @@
 ~3700 righe, sezioni separate da righe `══════`, nell'ordine: utilità →
 costanti `K` → mondo (`mkIsland`, `landDepth`, `buildShade`, `genWorld`) →
 stato (`boat`, `game`, vento) → fisica
-(`sailAero`, `aeroC`, `bestTrim`, `polarSpeed`, `trimWindows`, `physics`,
+(`sailAero`, `aeroC`, `bestTrim`, `polarSolve`, `trimWindows`, `physics`,
 `autopilot`) → tratteggi del vento → input → disegno → strumenti →
 interfaccia → rotta pianificata → pianificazione dei bordi → consiglio di
 rotta → carta nautica → giornale di bordo →
@@ -23,7 +23,7 @@ Cinque cose da sapere prima di toccarlo:
 - **`windAt(x,y)`** è chiamata centinaia di migliaia di volte per
   fotogramma fra fisica e tratteggi, e un test ne misura il costo (< 900 ms
   per 200 k campioni). Non metterci dentro allocazioni.
-- **`polarSpeed` costa ~0,8 ms a chiamata** — risolve un equilibrio con
+- **`polarSolve` costa ~0,8 ms a chiamata** — risolve un equilibrio con
   cinquanta iterazioni — e la pianificazione dei bordi ne chiede una
   settantina per trovare gli angoli di massima VMG. Va sempre attraverso
   `polarMemo1` / `andature`, che tengono i risultati per barca e vento
