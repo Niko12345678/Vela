@@ -4036,6 +4036,138 @@ function applicaStato(st){
   fillBarche();logRender();carRender();
 }
 
+/* ══════════════════ ripresa della sessione ══════════════════ */
+/* Il giornale e la carriera sopravvivevano già al ricaricamento della
+   pagina; la barca no. Un F5 in mezzo al canale — o il telefono che scarta
+   la scheda mentre rispondi a un messaggio — riportava al porto, sullo
+   scafo di partenza, con la traversata in corso buttata via e il carico
+   che intanto continuava a fare tardi. Qui si tiene da parte il resto:
+   quale carta, quale barca, dove stava e com'era regolata, a che punto era
+   la traversata, la rotta tracciata a mano.
+
+   È una fotografia della sessione, non un salvataggio: sta accanto agli
+   altri due nell'archivio del browser e nel codice portatile non entra —
+   una posizione in mare non ha senso su un altro dispositivo, dove magari
+   la carta è un'altra. Come tutto quello che si rilegge da fuori passa da
+   un filtro in entrata: chiavi mancanti, barche che non esistono più,
+   coordinate fuori dalla carta.                                        */
+const SESSIONE_V=1;
+const SESS_OGNI=3;              // secondi di orologio vero fra un salvataggio e l'altro
+let sessPronta=false;           // finché non si è letto l'archivio non ci si scrive sopra
+let sessT=0;
+
+function sessioneCorrente(){
+  const se=document.getElementById("seed");
+  return {
+    v:SESSIONE_V, quando:Date.now(),
+    carta:{modo:mapMode, seme:se?se.value:""},
+    barca:barcaId, ritmo:timeScale, dest:destPorto, sfida:challenge,
+    scafo:{x:boat.x,y:boat.y,h:boat.h,vx:boat.vx,vy:boat.vy,
+           trim:boat.trim,jib:boat.jib,barra:boat.rudderTrim,
+           reef:boat.reef,spi:boat.spi,fiocco:boat.jibFurled},
+    regata:{avviata:game.started,clock:game.clock,boa:game.next,fatta:game.done},
+    rotta:{i:piano.i,pts:piano.pts.map(p=>({x:p.x,y:p.y}))},
+    // la traccia si assottiglia come quella dei fantasmi: serve al
+    // confronto col record, non a ridisegnare ogni metro percorso
+    traversata: voy?{da:voy.from,t:voy.t,dist:voy.dist,track:decimate(voy.track,160)}:null
+  };
+}
+function salvaSessione(){ if(sessPronta) store.set("vela:sessione",sessioneCorrente()); }
+
+/* Rimette la sessione dov'era. Torna `true` se ha ripreso qualcosa, così
+   chi chiama sa se c'è da annunciarlo. Ordine obbligato: prima la carta,
+   perché rifarla rimette la barca al via e cancella la rotta; poi la
+   barca, che al cambio di scafo riporta a posto vele e terzaroli; solo
+   alla fine la posizione. */
+function riprendiSessione(s){
+  if(!s||typeof s!=="object"||Number(s.v)!==SESSIONE_V) return false;
+  const num=(v,d)=>Number.isFinite(Number(v))?Number(v):d;
+  const c=s.scafo||{};
+  const x=num(c.x,NaN), y=num(c.y,NaN);
+  if(!Number.isFinite(x)||!Number.isFinite(y)) return false;
+
+  const modo=(s.carta&&s.carta.modo==="rnd")?"rnd":"ionio";
+  const seme=String((s.carta&&s.carta.seme)||"").trim();
+  const se=document.getElementById("seed"); if(se&&seme)se.value=seme;
+  if(modo!==mapMode||modo==="rnd"){
+    mapMode=modo;
+    const ms=document.getElementById("mapsel"); if(ms)ms.value=modo;
+    newWorld(seme||semeCorrente());
+  }
+  /* Il fuori-carta si misura sulla carta appena rifatta, non su quella che
+     c'era prima: le due hanno lati diversi, e un punto buono nel Ionio
+     cadrebbe fuori da un arcipelago casuale. Se la barca non ci sta si
+     rinuncia — meglio il porto di partenza che un punto che non esiste —
+     e a quel punto la carta ripresa è comunque quella giusta. */
+  if(Math.hypot(x,y)>world.size*2) return false;
+
+  if(s.barca&&FLOTTA.barche[s.barca]&&(!CARRIERA.attiva||barcaTua(s.barca))){
+    setBarca(s.barca); if(boatEl)boatEl.value=barcaId;
+  }
+  if(RITMI.indexOf(num(s.ritmo,0))>=0) setRitmo(Number(s.ritmo),false);
+
+  boat.x=x;boat.y=y;
+  boat.vx=num(c.vx,0);boat.vy=num(c.vy,0);
+  boat.h=norm(num(c.h,boat.h));
+  boat.trim=clamp(num(c.trim,boat.trim),0,90*D2R);
+  boat.spi=!!c.spi&&!!K.SAIL_SPI;
+  boat.jibFurled=boat.spi?true:!!c.fiocco;
+  boat.jib=clamp(num(c.jib,boat.jib),0,boat.spi?90*D2R:80*D2R);
+  boat.rudderTrim=clamp(num(c.barra,0),-1,1);
+  boat.reef=clamp(Math.round(num(c.reef,0)),0,K.REEF.length-1);
+  boat.wake.length=0;
+
+  const g=s.regata||{};
+  game.started=!!g.avviata;
+  game.clock=Math.max(0,num(g.clock,0));
+  game.next=clamp(Math.round(num(g.boa,0)),0,world.marks.length);
+  game.done=Number.isFinite(Number(g.fatta))?Number(g.fatta):null;
+
+  // la sfida prima della traversata: è lei a dire quale fantasma inseguire
+  challenge=(typeof s.sfida==="string"&&LOG.best[s.sfida])?s.sfida:null;
+  const t=s.traversata;
+  if(t&&typeof t.da==="string"){
+    startVoyage(t.da);
+    voy.t=Math.max(0,num(t.t,0));
+    voy.dist=Math.max(0,num(t.dist,0));
+    voy.track=(Array.isArray(t.track)?t.track:[])
+      .filter(q=>Array.isArray(q)&&q.length>=3&&q.every(v=>Number.isFinite(Number(v))))
+      .map(q=>[Number(q[0]),Number(q[1]),Number(q[2])]);
+    voy.moving=voy.t>0;
+  }else if(world.ports&&world.ports.length) startVoyage(nearestPort(boat.x,boat.y));
+
+  const r=s.rotta||{};
+  piano.pts.length=0;
+  for(const p of (Array.isArray(r.pts)?r.pts:[]).slice(0,60))
+    if(p&&Number.isFinite(Number(p.x))&&Number.isFinite(Number(p.y)))
+      piano.pts.push({x:Number(p.x),y:Number(p.y)});
+  piano.i=clamp(Math.round(num(r.i,0)),0,piano.pts.length);
+  piano.da={x:boat.x,y:boat.y};
+
+  destPorto=(typeof s.dest==="string"&&portoDi(s.dest))?s.dest:null;
+  if(destEl)destEl.value=destPorto||"";
+
+  // vista e vento vanno rifatti attorno al punto nuovo: la telecamera
+  // altrimenti arriva scivolando da dove stava, e le raffiche restano
+  // indietro in mezzo al mare che la barca ha già lasciato
+  cam.x=boat.x;cam.y=boat.y;
+  gusts=[];for(let i=0;i<14;i++)gusts.push(newGust(true));
+  streaks=[];for(let i=0;i<160;i++)streaks.push(spawnStreak(true));
+  return true;
+}
+async function caricaSessione(){
+  let ripresa=false;
+  try{ ripresa=riprendiSessione(await store.get("vela:sessione")); }catch(e){}
+  sessPronta=true;
+  if(ripresa){
+    // chi riprende una navigazione non ha bisogno che gli si riapra la
+    // guida davanti al mare: l'ha già letta quando ha cominciato
+    if(helpEl)helpEl.classList.remove("on");
+    say("Ripresa la navigazione"+(voy?" da "+voy.from:"")+" — "+barcaCorrente().nome);
+  }
+  return ripresa;
+}
+
 /* ══════════════════ interfaccia della carriera ══════════════════ */
 const carEl=document.getElementById("carriera");
 if(carEl) carEl.addEventListener("pointerdown",e=>{if(e.target===carEl)toggleCar();});
@@ -4347,9 +4479,21 @@ document.getElementById("tutb").onclick=e=>{e.currentTarget.blur();tutStart();};
 /* ══════════════════ loop ══════════════════ */
 fillBarche();
 newWorld(semeCorrente());
-loadLog();
-caricaCarriera();
 helpEl.classList.add("on");
+/* L'archivio si legge in ordine, e la sessione per ultima: la carriera
+   dice quali barche sono tue, e senza quella risposta la ripresa non
+   saprebbe se lo scafo di ieri si può ancora imbarcare. Il gioco intanto
+   gira già — il primo fotogramma non aspetta il disco. */
+async function avvio(){
+  await loadLog();
+  await caricaCarriera();
+  await caricaSessione();
+}
+avvio();
+// l'ultima parola prima che la pagina se ne vada: `pagehide` è l'unico
+// evento che arriva davvero anche sul telefono che cambia applicazione
+addEventListener("pagehide",salvaSessione);
+addEventListener("visibilitychange",()=>{if(document.hidden)salvaSessione();});
 // su schermo piccolo il menù aperto coprirebbe mezzo mare — in orizzontale
 // tutto: si parte col solo ☰, che è dove il telefono se lo aspetta
 if(innerWidth<640||innerHeight<560) toggleMenu();
@@ -4371,6 +4515,10 @@ function frame(now){
     tutUpdate(sdt);
     if(game.msgT>0)game.msgT-=dt;                        // gli avvisi durano in tempo reale
   }
+  // la fotografia della sessione si aggiorna anche a gioco fermo: un
+  // pannello aperto quando si chiude la scheda non deve costare la posizione
+  sessT+=dt;
+  if(sessT>=SESS_OGNI){sessT=0;salvaSessione();}
   joyVista();
   draw();
   requestAnimationFrame(frame);
