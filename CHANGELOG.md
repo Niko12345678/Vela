@@ -10,6 +10,27 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
 ## Non rilasciato
 
 ### Aggiunto
+- **Ricaricare la pagina non costa più la navigazione.** Il giornale e la
+  carriera sopravvivevano già all'F5; la barca no. Chi ricaricava — o chi
+  si limitava a rispondere a un messaggio, col telefono che intanto
+  scartava la scheda — si ritrovava al porto, sullo scafo di partenza, con
+  la traversata in corso buttata via e il carico che nel frattempo aveva
+  continuato a fare tardi: la carriera si ricordava della scadenza, il mare
+  no. Ora accanto alle altre due c'è una terza chiave nell'archivio,
+  `vela:sessione`, che tiene la fotografia della partita in corso: quale
+  carta e con quale seme, quale barca, dove stava e com'era regolata
+  (scotte, terzaroli, spinnaker, cavallino), a che punto era la traversata
+  col suo cronometro e la sua traccia, la regata, la rotta tracciata a mano
+  e il porto d'arrivo scelto. Si riscrive ogni tre secondi e quando la
+  pagina se ne va; alla riapertura la guida non torna davanti, perché chi
+  riprende una navigazione l'ha già letta. Per ripartire da capo restano
+  *Riporta al via* e i porti di partenza, che è dove uno li cerca.
+  Non entra nel codice di salvataggio portatile: una posizione in mare non
+  vuol dire niente su un altro dispositivo, dove la carta può essere
+  un'altra. E come tutto quello che si rilegge da fuori passa da un filtro
+  in entrata — versione, coordinate dentro la carta, barca che esiste
+  ancora ed è tua se la carriera è aperta — perché una sessione storta è
+  peggio di una sessione persa: se non torna si riparte dal porto, e basta.
 - **La rotta consigliata: da che parte si va, col vento che c'è.** I bordi
   rispondono per *una* tratta e a mare libero, ma la domanda di chi impara
   a pianificare è più grande — «sono a Nydri, voglio andare a Fiskardo, il

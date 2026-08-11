@@ -7,8 +7,8 @@ stato (`boat`, `game`, vento) → fisica
 `autopilot`) → tratteggi del vento → input → disegno → strumenti →
 interfaccia → rotta pianificata → pianificazione dei bordi → consiglio di
 rotta → carta nautica → giornale di bordo →
-carriera → salvataggio portatile → interfaccia della carriera →
-tutorial → ciclo.
+carriera → salvataggio portatile → ripresa della sessione →
+interfaccia della carriera → tutorial → ciclo.
 
 Cinque cose da sapere prima di toccarlo:
 
@@ -36,7 +36,12 @@ Cinque cose da sapere prima di toccarlo:
   per cui esiste il codice di salvataggio portatile (`codificaStato` /
   `decodificaStato`): tutto quello che aggiungi allo stato persistente deve
   essere serializzabile in JSON e passare da `carrieraSana()` in entrata,
-  perché quel testo lo può aver scritto chiunque.
+  perché quel testo lo può aver scritto chiunque. Le chiavi sono tre —
+  `vela:log`, `vela:carriera`, `vela:sessione` — e la terza è la fotografia
+  della partita in corso (carta, barca, posizione, traversata, rotta): la
+  scrive `salvaSessione()` ogni tre secondi e alla chiusura della pagina,
+  la rilegge `riprendiSessione()`, e nel codice portatile **non entra**,
+  perché una posizione in mare non vuol dire niente su un'altra carta.
 
 **Niente `import` qui dentro.** La harness esegue questo file dentro una
 `new Function`, dove una dichiarazione `import` è un errore di sintassi:
