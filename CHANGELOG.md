@@ -9,6 +9,26 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
 
 ## Non rilasciato
 
+### Cambiato
+- **Il vento di fondo si calcola una volta per fotogramma, non a ogni
+  campione.** Le due sinusoidi lente sulla direzione e quella sulla
+  velocità non dipendono da dove sei: dipendono solo dal tempo. Stavano
+  però dentro `windAt`, che fra fisica e tratteggi viene chiamata
+  centinaia di migliaia di volte per fotogramma, e quindi ricalcolavano
+  tre seni identici a ogni campione per ottenere sempre lo stesso numero.
+  Ora si tengono da parte finché il tempo o le manopole del vento non si
+  muovono: tre confronti al posto di tre `Math.sin`. Con le raffiche
+  accese il campo di vento passa da 160 a 136 ms per 200 000 campioni.
+  I valori non cambiano di un bit — verificato campionando direzione e
+  velocità a quattro tempi e tre posizioni, e confrontando le cifre a una
+  a una.
+  La cache sta accanto a `windAt` e non dentro `updateWind` apposta:
+  `windAt` la chiama anche chi il ciclo non lo fa girare — il consiglio di
+  rotta, il collaudo — e deve dare la risposta giusta lo stesso, senza che
+  nessuno debba ricordarsi di aggiornare prima qualcos'altro. È anche il
+  posto dove andrà il vento che cambia con le ore, che è il motivo per cui
+  quel gradino si fa adesso.
+
 ### Aggiunto
 - **`O`: la manovra assistita, e l'indicatore che dice se si passa.**
   Virare era la cosa più difficile da azzeccare, e il motivo è che non

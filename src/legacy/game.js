@@ -295,9 +295,30 @@ function say(t){game.msg=t;game.msgT=3.2;}
 
 /* campo di vento locale: base oscillante + raffiche */
 let shadeDir={x:0,y:1};     // direzione in cui soffia, aggiornata una volta per fotogramma
+
+/* ─ il vento di fondo ─
+   Due sinusoidi lente sulla direzione (±6° e ±4°, periodi di un minuto e
+   mezzo e di cinque) e una sulla velocità (±7%). Non dipendono da dove sei:
+   dipendono **solo** dal tempo. Stavano dentro `windAt`, che è chiamata
+   centinaia di migliaia di volte per fotogramma fra fisica e tratteggi, e
+   quindi ricalcolavano tre seni identici a ogni campione — mezzo milione di
+   volte per fotogramma per ottenere sempre lo stesso numero.
+   Qui si calcolano una volta sola e si tengono, finché il tempo o le
+   manopole del vento non si muovono. La condizione è tre confronti al posto
+   di tre `Math.sin`, ed è tenuta qui invece che in `updateWind` apposta:
+   `windAt` va chiamata anche da chi il ciclo non lo fa girare — il
+   consiglio di rotta, il collaudo — e deve dare la risposta giusta lo
+   stesso, senza che nessuno si ricordi di aggiornare prima qualcosa. */
+let ventoT=NaN, ventoB=NaN, ventoD=NaN, ventoFrom=0, ventoSpd=0;
+function ventoBase(){
+  if(game.t===ventoT&&windBase===ventoB&&windDirBase===ventoD) return;
+  ventoT=game.t; ventoB=windBase; ventoD=windDirBase;
+  ventoFrom=windDirBase+Math.sin(game.t*0.07)*6*D2R+Math.sin(game.t*0.021+1.7)*4*D2R;
+  ventoSpd=windBase*(1+0.07*Math.sin(game.t*0.12+0.6));
+}
 function windAt(x,y){
-  let from=windDirBase+Math.sin(game.t*0.07)*6*D2R+Math.sin(game.t*0.021+1.7)*4*D2R;
-  let spd=windBase*(1+0.07*Math.sin(game.t*0.12+0.6));
+  ventoBase();
+  let from=ventoFrom, spd=ventoSpd;
   for(const g of gusts){
     const d=Math.hypot(x-g.x,y-g.y);
     if(d<g.r){const k=Math.cos(d/g.r*Math.PI/2); spd*=1+g.s*k; from+=g.sh*k;}
