@@ -9,7 +9,67 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
 
 ## Non rilasciato
 
+### Aggiunto
+- **`O`: la manovra assistita, e l'indicatore che dice se si passa.**
+  Virare era la cosa più difficile da azzeccare, e il motivo è che non
+  c'era modo di *sapere* se sarebbe riuscita: si provava, e se l'abbrivio
+  non bastava ci si ritrovava in panne senza aver capito cosa si era
+  sbagliato. Ora un tasto solo porta la barca dall'altro bordo — vira se si
+  sta stringendo il vento, stramba se si sta scendendo — e accanto alla
+  rosa dei venti c'è una spia che dice, **prima** di provarci, se con
+  questo abbrivio il vento si passa.
+  Non è un aiuto magico e non è un secondo autotimoniere: scrive soltanto
+  su barra e scotte, cioè esattamente quello che ha sotto mano chi governa,
+  e la fisica non sa nemmeno che esiste. Chi vuole virare a mano fa come
+  prima; questo è il timoniere esperto che ti fa vedere come.
+  Tre cose la tengono onesta. **Rifiuta quando non si passa**, perché un
+  aiuto che ti porta in panne è peggio di nessun aiuto: la soglia è il 60 %
+  della velocità di bolina che il polare dà con quel vento e quella barca,
+  ed è una frazione e non un numero fisso perché il caso vero lo chiede —
+  misurato sullo sloop, con 7 m/s si passa perfino a un nodo (in 36
+  secondi), mentre con 14 m/s a tutto ferro sotto i tre nodi **non si passa
+  affatto**. **Sa rimediare**: se la prua si pianta nel vento mette il
+  fiocco a collo da sola e lo libera quando è caduta, che è la manovra che
+  il messaggio della panne suggeriva a parole. E **molla appena tocchi
+  qualcosa** — barra, scotte, autotimoniere, o `O` di nuovo — perché chi
+  tocca comanda, anche a metà virata.
+  Misurata su tutta la flotta: la virata riesce fra gli 8,8 e i 25 secondi
+  dal gozzo al cutter, con 5, 7 e 12 m/s, e la barca esce sempre con
+  l'abbrivio addosso. Il tasto è anche nella pulsantiera a dito, come
+  *Vira*.
+  La spia non costa niente di nuovo: la soglia la sapeva già il polare, e
+  finora non la diceva a nessuno.
+- `test/virata.test.js`: la manovra su quattro barche e tre venti, la
+  strambata che non è una virata, il rifiuto con la barca ferma e con 27
+  nodi a tutto ferro, i quattro modi di annullarla, e l'indicatore che deve
+  dire sempre la stessa cosa che poi farà la manovra.
+
 ### Corretto
+- **Lenti e stretti al vento, ora la barra serve a qualcosa.** C'era una
+  sproporzione nascosta fra il timone e le vele. Rallentando, la pala
+  perdeva presa in fretta — è giusto, è l'acqua che le scorre sopra — ma le
+  vele no: il loro momento d'imbardata aveva un pavimento, e il conto era
+  fatto in modo da renderlo *relativamente più forte* man mano che la barca
+  si fermava. Dimezzando l'andatura il timone perdeva un fattore sei e le
+  vele uno e mezzo. Sotto i due decimi di metro al secondo la barra a tutta
+  banda non pareggiava più nemmeno l'orza delle vele: da lì non si tornava,
+  e non perché si fosse sbagliata la manovra, ma perché non ce n'era una
+  giusta. Ora anche le vele mollano la presa quando la barca si ferma.
+  Misurato sullo sloop, partendo lenti col timone tutto a poggiare: da 0,6
+  nodi a 30° dal vento si torna a 2 nodi in 10,9 s invece di 17,0; da 0,4
+  nodi a 25° in 17,7 s invece di 37,9; con vento fresco in 4,1 s invece di
+  10,6. E da 0,2 nodi a 20°, dove **prima non si recuperava affatto**, ora
+  si recupera in 36,6 s.
+  Il fattore vale esattamente 1 sopra i 0,9 m/s, e lì sta tutto quello che
+  il collaudo misura: il minimo in ogni scenario della golden test è 1,007,
+  quindi non si è mosso un decimale di nessun valore atteso. Quello che
+  resta invariato è anche il punto: con la prua nel vento e **la barra al
+  centro** non se ne esce lo stesso, perché non c'è nessuna barra che
+  vinca. La panne continua a chiedere una manovra, solo non è più una buca
+  in cui si cade senza aver sbagliato niente.
+- `test/panne.test.js` guadagna il recupero col timone da quattro
+  situazioni di quasi-stallo, con i tempi di prima scritti accanto a quelli
+  di adesso.
 - **Con poco vento la bolina non si poteva fare, e la colpa era
   dell'autotimoniere.** Chi partiva da un porto con aria leggera e provava a
   risalire il vento si ritrovava, dopo un minuto, a mezzo nodo e quaranta
