@@ -79,7 +79,7 @@ test("ogni scafo ha il carattere dichiarato in barche.json", async () => {
                leggero: steady(90, { wind: 3 }), forte: steady(90, { wind: 16 }),
                spi: K.SAIL_SPI > 0, mani: K.REEF.length, pescaggio: K.PESCAGGIO };
     };
-    // virata di 90° da bolina: la manovra che separa una barca leggera da una pesante
+    // virata di 90° da bolina: che la manovra riesca, e in quanto
     const virata = id => {
       setBarca(id);
       windBase = 7; windDirBase = 0; gusts = []; streaks = [];
@@ -93,10 +93,38 @@ test("ogni scafo ha il carattere dichiarato in barche.json", async () => {
         if (Math.abs(norm(boat.h-h0)) > 90*D2R) return i/60; }
       return null;
     };
+    /* Quanto la barca è pronta alla barra, misurato al traverso e a rotta
+       libera: la punta di velocità di rotazione, e i secondi che ci mette a
+       raggiungerne la metà. Sono le due facce di YAWTAU e RUDDER, e a
+       differenza della virata di 90° non risentono di quanta velocità la
+       barca perde passando il vento — che è un'altra cosa, e per il gozzo è
+       la cosa che domina. */
+    const prontezza = id => {
+      const avvia = () => {
+        setBarca(id);
+        windBase = 7; windDirBase = 0; gusts = []; streaks = [];
+        boat.x=0;boat.y=0;boat.vx=0;boat.vy=0;boat.h=90*D2R;boat.heel=0;boat.yawRate=0;
+        boat.stuck=0;boat.gtime=0;boat.jibBack=false;boat.jibFurled=false;boat.spi=false;
+        boat.reef=0;game.auto=true;game.pilot=2;game.pilotTgt=boat.h;game.t=0;game.msgT=99;
+        for (let i=0;i<4000;i++){ trimWindows(); autopilot(1/60); physics(1/120); physics(1/120); game.t+=1/60; }
+        game.pilot=0; boat.rudderCmd=1;
+      };
+      avvia();
+      let picco=0;
+      for (let i=0;i<3000;i++){ trimWindows(); physics(1/120); physics(1/120); game.t+=1/60;
+        picco=Math.max(picco,Math.abs(boat.yawRate)*R2D); }
+      avvia();
+      let ritardo=null;
+      for (let i=0;i<3000 && ritardo===null;i++){ trimWindows(); physics(1/120); physics(1/120); game.t+=1/60;
+        if (Math.abs(boat.yawRate)*R2D >= picco*0.5) ritardo=i/60; }
+      return { picco, ritardo };
+    };
     report({ gozzo: misura("gozzo"), sloop: misura("crociera11"),
              regata: misura("regata12"), cutter: misura("cutter15"),
              virataSloop: virata("crociera11"), virataCutter: virata("cutter15"),
-             virataGozzo: virata("gozzo") });
+             virataGozzo: virata("gozzo"),
+             prGozzo: prontezza("gozzo"), prSloop: prontezza("crociera11"),
+             prCutter: prontezza("cutter15") });
   `);
 
   // ─ gozzo: agile e leggero, ma scarroccia e va piano
@@ -135,13 +163,31 @@ test("ogni scafo ha il carattere dichiarato in barche.json", async () => {
   assert.ok(r.cutter.pescaggio > r.sloop.pescaggio,
     "il cutter deve pescare più dello sloop");
 
-  // ─ la virata è la manovra che racconta la differenza meglio di tutte
+  /* ─ la prontezza alla barra: quanto la barca risponde, e quanto tardi
+     Qui c'era un'asserzione che pretendeva la virata del cutter tre volte
+     più lenta di quella dello sloop. Passava, ma misurava un difetto: fino
+     a che l'autotimoniere si sfilava dopo due secondi di `stuck`, il cutter
+     — che è lento a prendere lo spunto — non arrivava mai a velocità e
+     cominciava la manovra a un nodo e trentaquattro gradi fuori rotta, da
+     cui 52,7 s. Riparato quello, a parità di abbrivio vira in 9,55 s contro
+     i 9,22 dello sloop: il tre non c'è mai stato, era il tempo che il
+     cutter passava a non navigare.
+     Quello che invece regge — e dice la stessa cosa di `barche.json`, che
+     sul cutter «tutto succede trenta secondi dopo che l'hai deciso» — è la
+     prontezza alla barra a rotta libera, dove non c'entra quanta velocità
+     si perde passando il vento. */
   assert.ok(r.virataSloop !== null && r.virataGozzo !== null && r.virataCutter !== null,
     `ogni barca deve riuscire a virare di 90°: gozzo ${r.virataGozzo}, sloop ${r.virataSloop}, cutter ${r.virataCutter}`);
-  assert.ok(r.virataCutter > r.virataSloop * 3,
-    `il cutter deve impiegarci molto più dello sloop: ${r.virataSloop.toFixed(1)} s -> ${r.virataCutter.toFixed(1)} s`);
   assert.ok(r.virataCutter < 90,
     `ma deve pur sempre virare in tempi giocabili (ottenuto ${r.virataCutter.toFixed(1)} s)`);
+  assert.ok(r.prCutter.ritardo > r.prSloop.ritardo * 1.15,
+    `il cutter deve rispondere alla barra più tardi dello sloop: ${r.prSloop.ritardo.toFixed(2)} s -> ${r.prCutter.ritardo.toFixed(2)} s`);
+  assert.ok(r.prCutter.picco < r.prSloop.picco,
+    `e girare più piano: ${r.prSloop.picco.toFixed(1)} °/s -> ${r.prCutter.picco.toFixed(1)} °/s`);
+  assert.ok(r.prGozzo.ritardo < r.prSloop.ritardo && r.prGozzo.picco > r.prSloop.picco * 1.25,
+    `il gozzo vira su una moneta: ${r.prSloop.picco.toFixed(1)} °/s in ${r.prSloop.ritardo.toFixed(2)} s -> ${r.prGozzo.picco.toFixed(1)} °/s in ${r.prGozzo.ritardo.toFixed(2)} s`);
+  assert.ok(r.virataGozzo > r.virataSloop,
+    `ma perde tanta velocità passando il vento da metterci di più a virare di 90°: ${r.virataSloop.toFixed(1)} s -> ${r.virataGozzo.toFixed(1)} s`);
 });
 
 test("cambiare barca adatta il corredo al nuovo scafo", async () => {

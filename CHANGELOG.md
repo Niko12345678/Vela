@@ -9,6 +9,55 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
 
 ## Non rilasciato
 
+### Corretto
+- **Con poco vento la bolina non si poteva fare, e la colpa era
+  dell'autotimoniere.** Chi partiva da un porto con aria leggera e provava a
+  risalire il vento si ritrovava, dopo un minuto, a mezzo nodo e quaranta
+  gradi fuori rotta, senza aver sbagliato niente: bastava questo a far
+  sembrare che di bolina si andasse in panne per un nonnulla. Il meccanismo
+  era una trappola che si chiudeva da sola. `boat.stuck` — il cronometro
+  della panne — cresceva ogni volta che la barca stava sotto i 0,35 m/s con
+  la prua entro 52° dal vento, e una barca che *parte da ferma* di bolina ci
+  sta dentro per qualche secondo mentre accelera, senza essere in panne per
+  niente. A due secondi il pilota si disinseriva **e azzerava la barra**;
+  da lì la barca orzava piano fino a spegnersi, e più era pesante peggio
+  finiva. Misurato sullo sloop: a 4 m/s si finiva a 0,04 nodi, a 5 m/s a
+  0,34, a 6 m/s a 0,59 — contro l'1,10, l'1,42 e l'1,75 che il polare le dà.
+  Ora sono 2,00, 2,54 e 3,13 nodi, in rotta entro cinque gradi.
+  Tre strette, tutte allo stesso principio — «lento» non è «in panne»: il
+  cronometro parte solo dentro i 40° dal vento e solo se la barca **non sta
+  accelerando**; il pilota molla dopo otto secondi invece di due, e solo con
+  la prua davvero dentro il vento; e quando molla **lascia la barra dov'è**,
+  perché a riprenderla è l'uomo. La panne resta severa: con la prua nel
+  vento e le mani ferme non se ne esce, e ci vuole ancora il fiocco a collo.
+- `test/panne.test.js`: la partenza di bolina a 4, 5 e 6 m/s che deve
+  arrivare a quello che promette il polare tenendo la rotta; la panne che
+  resta un vicolo cieco anche dopo due minuti e mezzo, e che col fiocco a
+  collo si apre; e il cronometro della panne che non parte mentre la barca
+  accelera ma corre quando la panne è vera. I primi due erano rossi prima
+  della correzione.
+
+### Cambiato
+- **Il collaudo del cutter non misura più un difetto.** `barche.test.js`
+  pretendeva che il cutter virasse di 90° in più del triplo del tempo dello
+  sloop, e ci riusciva: 52,7 s contro 9,2. Ma quei 52,7 secondi non erano
+  l'inerzia del cutter, erano l'autotimoniere che lo abbandonava — essendo
+  lento a prendere lo spunto, il cutter non arrivava mai a velocità e
+  cominciava la manovra a un nodo e trentaquattro gradi fuori rotta.
+  Riparata la trappola, a parità di abbrivio vira in 9,55 s: il triplo non
+  c'è mai stato, era il tempo che il cutter passava a non navigare.
+  Al suo posto un'asserzione che dice la stessa cosa di `barche.json` — sul
+  cutter «tutto succede trenta secondi dopo che l'hai deciso» — ma la
+  misura dove non c'entra quanta velocità si perde passando il vento: la
+  **prontezza alla barra** a rotta libera, cioè la punta di velocità di
+  rotazione e i secondi per arrivare a metà di quella punta. Lì il cutter
+  risponde con un quarto di ritardo in più dello sloop e gira più piano,
+  mentre il gozzo vira su una moneta (il 41 % di punta in più, e prima).
+  Con in più il fatto che il gozzo, pur essendo il più pronto di tutti,
+  **ci mette di più a virare di 90°**, perché passando il vento perde due
+  terzi della velocità: sono due qualità diverse e ora il collaudo le tiene
+  distinte.
+
 ### Aggiunto
 - **Ricaricare la pagina non costa più la navigazione.** Il giornale e la
   carriera sopravvivevano già all'F5; la barca no. Chi ricaricava — o chi
