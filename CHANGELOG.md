@@ -9,6 +9,42 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
 
 ## Non rilasciato
 
+### Aggiunto
+- **L'ora di bordo.** Nel riquadro di velocità e vento compare che ora è e
+  in che fase sta il cielo — alba, giorno, tramonto, notte — e dal secondo
+  giorno anche quale. Non è un orologio a parte e non introduce una seconda
+  scala del tempo, che sarebbe il modo migliore di farle litigare: è la
+  stessa di `nm` e di `realT`, cioè quella che il gioco ha già. La carta è
+  ridotta 1:6, quindi **un secondo di cronometro vale sei secondi di
+  orologio**, ed è lo stesso conto per cui il giornale di bordo dice «5 h»
+  di una traversata durata cinquanta minuti al cronometro. Se avessi scelto
+  una durata del giorno a occhio, una traversata di trenta miglia avrebbe
+  attraversato tre albe mentre il giornale ne dichiarava cinque ore.
+  Ne viene un giorno da quattro ore di gioco a ritmo 1×, due a 2×, un
+  quarto d'ora a 16×: una traversata copre qualche ora della giornata, e si
+  può partire col fresco del mattino e arrivare che il sole cala. Si salpa
+  alle 08:00.
+  È una **funzione pura del cronometro**: niente da integrare, niente che
+  possa scivolare, e a parità di cronometro sempre la stessa ora comunque
+  ci si sia arrivati. Serve così perché è la base su cui poggeranno la
+  brezza che gira con le ore e le correnti di marea, che devono restare
+  ripetibili.
+- `test/orologio.test.js`: la scala verificata sui suoi numeri (14 400 s di
+  cronometro per giorno, dieci minuti per ogni ora di bordo), l'ora che non
+  dipende da come ci si è arrivati, il ritmo di gioco che accelera
+  l'orologio senza sfasarlo, il giro completo salva-e-riprendi, e una
+  sessione ostile che non deve mandare l'orologio fuori giri.
+
+### Corretto
+- **La sessione salva anche il vento.** Non l'aveva mai fatto: finché la
+  direzione era una costante scritta nel file non si notava, ma ricaricare
+  la pagina significava comunque ritrovarsi la bolina da rifare. Ora forza
+  e direzione stanno nella fotografia della partita insieme al cronometro,
+  e come tutto quello che si rilegge da fuori passano da un filtro in
+  entrata — il vento dentro la scala del cursore, l'ora di partenza dentro
+  le ventiquattr'ore, il cronometro mai negativo — perché quel testo lo può
+  aver scritto chiunque.
+
 ### Cambiato
 - **Il vento di fondo si calcola una volta per fotogramma, non a ogni
   campione.** Le due sinusoidi lente sulla direzione e quella sulla

@@ -1881,7 +1881,7 @@ function drawHUD(){
   const hdg=(norm(boat.h)*R2D+360)%360;
 
   /* ── strumenti, in alto a sinistra */
-  const px=14,py=14,pw=196,ph=126;
+  const px=14,py=14,pw=196,ph=148;
   if(hud.strumenti){
   panel(px,py,pw,ph);
   label("VELOCITÀ",px+12,py+20);
@@ -1900,6 +1900,17 @@ function drawHUD(){
   ctx.fillStyle=Math.abs(twa*R2D)<32?C("--warn"):C("--good");
   ctx.font="12px ui-monospace,monospace";ctx.textAlign="right";
   ctx.fillText(pointOfSail(twa),px+pw-12,py+112);
+  /* L'ora di bordo. Sta qui e non altrove perché è un dato di navigazione
+     come la rotta: quanta luce resta decide se si entra in quella cala o
+     si passa al largo. Il giorno si mostra solo dal secondo in poi, che è
+     quando comincia a voler dire qualcosa. */
+  ctx.fillStyle="rgba(243,234,212,.15)";ctx.fillRect(px+12,py+124,pw-24,1);
+  label("ORA DI BORDO",px+12,py+140);
+  const gg=giornoDiBordo(), fase=faseDelCielo();
+  ctx.fillStyle=fase==="notte"?C("--chart-dim"):C("--chart");
+  ctx.font="12px ui-monospace,monospace";ctx.textAlign="right";
+  ctx.fillText(oraHM()+(gg?"  g"+(gg+1):"")+"  "+fase,px+pw-12,py+140);
+  ctx.textAlign="left";
   }
 
   /* ── rosa dei venti, in alto a destra */
@@ -3835,6 +3846,40 @@ const realT=t=>{                                     // tempo che ci vorrebbe al
   const h=Math.floor(t*SCALE_GEO/3600), mi=Math.round(t*SCALE_GEO%3600/60);
   return h?h+" h "+String(mi).padStart(2,"0"):mi+" min";
 };
+
+/* ── l'orologio di bordo ──
+   Che ora è, a bordo. Non è una scala del tempo nuova: è la stessa di
+   `realT` e di `nm`, cioè quella che il gioco ha già. Le miglia mostrate
+   sono vere e le distanze sono ridotte 1:6, quindi un secondo di
+   cronometro è **`SCALE_GEO` secondi di orologio**, ed è l'unica scelta
+   che non fa litigare il giornale di bordo col sole: se un passaggio dice
+   «5 h», il cielo deve aver fatto cinque ore.
+   Ne viene un giorno da 14 400 secondi di cronometro — quattro ore a
+   ritmo 1×, due a 2×, un quarto d'ora a 16×. Una traversata copre quindi
+   qualche ora della giornata, che è esattamente quello che si vuole:
+   partire col fresco del mattino e arrivare che il sole cala.
+   È una funzione pura di `game.t` e dell'ora di partenza — niente da
+   integrare, niente che possa scivolare, e a parità di seme la stessa
+   giornata. */
+const GIORNO=86400/SCALE_GEO;         // secondi di cronometro in un giorno di bordo
+let oraPartenza=8*3600;               // si salpa alle 08:00 (secondi veri da mezzanotte)
+const oraDiBordo=()=>((oraPartenza+game.t*SCALE_GEO)%86400+86400)%86400;
+const oraH=()=>oraDiBordo()/3600;     // 0…24, comoda per le formule del meteo
+const giornoDiBordo=()=>Math.floor((oraPartenza+game.t*SCALE_GEO)/86400);
+const oraHM=()=>{                     // "14:32"
+  const s=oraDiBordo();
+  return String(Math.floor(s/3600)).padStart(2,"0")+":"+String(Math.floor(s%3600/60)).padStart(2,"0");
+};
+/* Le quattro fasi del cielo, con i loro confini. Le ore del crepuscolo
+   sono quelle del Mediterraneo a mezza stagione, non un'astronomia vera:
+   servono a dare un nome a quello che si vede, e a dire a chi guarda lo
+   strumento se conviene partire adesso o aspettare la luce. */
+function faseDelCielo(h=oraH()){
+  if(h<5||h>=21) return "notte";
+  if(h<7)  return "alba";
+  if(h<19) return "giorno";
+  return "tramonto";
+}
 let LOG={passages:[],polar:{},best:{}};
 let voy=null, challenge=null;
 
@@ -4332,6 +4377,12 @@ function sessioneCorrente(){
     v:SESSIONE_V, quando:Date.now(),
     carta:{modo:mapMode, seme:se?se.value:""},
     barca:barcaId, ritmo:timeScale, dest:destPorto, sfida:challenge,
+    /* Il tempo e il vento. Il vento non era mai stato salvato: finché la
+       direzione era una costante scritta nel file non si notava, ma è
+       comunque la differenza fra ritrovare la bolina dov'era e ritrovarsela
+       da rifare. `t` è il cronometro, da cui discende l'ora di bordo. */
+    tempo:{t:game.t, ora0:oraPartenza},
+    vento:{dir:windDirBase, base:windBase},
     scafo:{x:boat.x,y:boat.y,h:boat.h,vx:boat.vx,vy:boat.vy,
            trim:boat.trim,jib:boat.jib,barra:boat.rudderTrim,
            reef:boat.reef,spi:boat.spi,fiocco:boat.jibFurled},
@@ -4375,6 +4426,23 @@ function riprendiSessione(s){
     setBarca(s.barca); if(boatEl)boatEl.value=barcaId;
   }
   if(RITMI.indexOf(num(s.ritmo,0))>=0) setRitmo(Number(s.ritmo),false);
+
+  /* Tempo e vento, filtrati come tutto il resto: quel testo lo può aver
+     scritto chiunque. Il cronometro non può essere negativo, l'ora di
+     partenza si riporta dentro le ventiquattr'ore, il vento dentro la
+     scala del cursore — un vento di trecento nodi non è una sessione, è
+     un dispetto. Vanno rimessi **prima** della posizione, perché
+     `newWorld` più sopra ha già ricostruito raffiche e tratteggi sul
+     vento vecchio, e da qui in poi tutto quello che si calcola deve
+     vedere quello giusto. */
+  const tm=s.tempo||{}, ve=s.vento||{};
+  game.t=Math.max(0,num(tm.t,game.t));
+  oraPartenza=((num(tm.ora0,8*3600)%86400)+86400)%86400;
+  windDirBase=norm(num(ve.dir,windDirBase));
+  windBase=clamp(num(ve.base,windBase),2,16);
+  const wEl=document.getElementById("wind"), wVal=document.getElementById("windv");
+  if(wEl)wEl.value=String(windBase);
+  if(wVal)wVal.textContent=windBase.toFixed(1)+" m/s";
 
   boat.x=x;boat.y=y;
   boat.vx=num(c.vx,0);boat.vy=num(c.vy,0);
