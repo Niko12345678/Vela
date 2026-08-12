@@ -191,7 +191,7 @@ const boat={x:0,y:0,vx:0,vy:0,h:0,
   trim:45*D2R, jib:35*D2R,                      // scotte: randa e fiocco
   rudder:0, rudderCmd:0, rudderTrim:0, yawRate:0,   // barra: comando, cavallino (il neutro) e pala (con inerzia)
   boomSide:1, boomDraw:Math.PI, jibDraw:Math.PI, jibSide:1, butterfly:false,
-  jibFurled:false, jibBack:false, spi:false, spiLimp:false, reef:0, stuck:0, gtime:0,
+  jibFurled:false, jibBack:false, spi:false, spiLimp:false, reef:0, stuck:0, spPrec:0, gtime:0,
   wM:{opt:0,lo:0,hi:90*D2R,maxT:90*D2R}, wJ:{opt:0,lo:0,hi:80*D2R,maxT:80*D2R},
   heel:0, luff:0, luffJ:0, aoa:0, aoaJ:0, balance:0, beta:0, grounded:0, wake:[]};
 const game={paused:false,auto:false,zoom:3.4,t:0,started:false,clock:0,next:0,done:null,
@@ -250,7 +250,7 @@ function resetBoat(){
   }
   boat.h=bh;
   boat.trim=45*D2R;boat.jib=35*D2R;boat.rudder=0;boat.rudderCmd=0;boat.rudderTrim=0;boat.yawRate=0;
-  boat.jibFurled=false;boat.jibBack=false;boat.spi=false;boat.reef=0;boat.stuck=0;boat.gtime=0;
+  boat.jibFurled=false;boat.jibBack=false;boat.spi=false;boat.reef=0;boat.stuck=0;boat.spPrec=0;boat.gtime=0;
   game.pilot=0;boat.wake.length=0;boat.grounded=0;
   game.clock=0;game.next=0;game.started=false;game.done=null;
   // la rotta pianificata resta — è un disegno del marinaio, non uno stato
@@ -536,9 +536,16 @@ function physics(dt){
   if(backed && ab>65*D2R && Math.hypot(boat.vx,boat.vy)>1.0){
     boat.jibBack=false; say("Prua caduta — fiocco liberato");
   }
-  // riconosce la panne e suggerisce la manovra
+  /* Riconosce la panne e suggerisce la manovra. Due strette rispetto a prima,
+     entrambe per lo stesso motivo: «lento» non è «in panne». I 52° erano
+     larghissimi — a mezza bolina, con una raffica caduta, ci si finiva dentro
+     senza esserci — e soprattutto la barca che *sta accelerando* non è ferma,
+     è solo partita da poco. Da qui il confronto con la velocità del passo
+     prima: se sta guadagnando, il cronometro della panne non parte. */
   const spNow=Math.hypot(boat.vx,boat.vy);
-  if(spNow<0.35 && ab<52*D2R){
+  const accelera=spNow>boat.spPrec+1e-4;
+  boat.spPrec=spNow;
+  if(spNow<0.35 && ab<40*D2R && !accelera){
     boat.stuck+=dt;
     if(boat.stuck>3 && game.msgT<=0)
       say(jibUp?"In panne — premi B: fiocco a collo per far cadere la prua":"In panne — issa il fiocco (F) e mettilo a collo (B)");
@@ -601,9 +608,19 @@ function autopilot(dt){
     if(!L&&!R) boat.rudderCmd-=(boat.rudderCmd-boat.rudderTrim)*Math.min(1,1.9*dt);   // torna al cavallino, non al centro
     return;
   }
-  // un pilota che continua a governare con la barca ferma ti impedisce di ripartire
-  if(boat.stuck>2){game.pilot=0;boat.rudderCmd=0;
-    say("Autotimoniere disinserito: la barca è ferma, riprendi tu la barra");return;}
+  /* Un pilota che continua a governare con la barca in panne ti impedisce di
+     ripartire: la barra tenuta a una banda non fa che tenerti dentro il vento.
+     Ma «in panne» non è «lenta». Partendo da fermo di bolina la barca resta
+     sotto il mezzo nodo per qualche secondo *mentre accelera*, e mollare lì —
+     per giunta azzerando la barra — voleva dire che sotto i 6 m/s la bolina
+     non partiva affatto: il pilota si sfilava a due secondi e la barca se ne
+     andava a quaranta gradi dalla rotta a un terzo di nodo, contro il nodo e
+     mezzo che il polare le dà. Quindi si molla solo con la prua davvero dentro
+     il vento e dopo un tempo lungo, e la barra resta dov'è: la riprende
+     l'uomo, non la azzera il pilota. */
+  if(boat.stuck>8 && Math.abs(boat.beta)<30*D2R){
+    game.pilot=0;
+    say("Autotimoniere disinserito: la barca è in panne, riprendi tu la barra");return;}
   let err;
   if(game.pilot===2) err=norm(game.pilotTgt-boat.h);
   else err=norm(boat.beta-game.pilotTgt);
