@@ -640,6 +640,105 @@ function autopilot(dt){
   else err=norm(boat.beta-game.pilotTgt);
   boat.rudderCmd=clamp(err*3.4-boat.yawRate*6.5,-1,1);
 }
+/* ── la manovra assistita ──
+   Un tasto solo, `O`, che porta la barca dall'altro bordo: vira se si sta
+   stringendo il vento, stramba se si sta scendendo. Non è un aiuto magico
+   e non è un secondo autotimoniere: scrive **soltanto** su barra e scotte,
+   cioè esattamente le stesse quattro cose che ha sotto mano chi governa, e
+   la fisica non sa nemmeno che esiste. Chiunque può fare la stessa manovra
+   a mano, come prima; questo è il timoniere esperto che ti fa vedere come.
+
+   Tre regole che la tengono onesta.
+
+   **Rifiuta quando non si passa.** Sotto una certa velocità la virata non
+   riesce e si finisce in panne, e un aiuto che ti ci porta dentro è
+   peggio di nessun aiuto. La soglia non è un numero scritto a mano: è il
+   60% della velocità di bolina che il polare dà con questo vento e questa
+   barca. Misurato sullo sloop: con 7 m/s si passa anche a un nodo ma ci
+   vogliono 36 secondi, mentre con 14 m/s a tutto ferro sotto i 3 nodi non
+   si passa affatto — e quella frazione separa i due casi lungo tutta la
+   scala del vento.
+
+   **Sa rimediare.** Se la prua si pianta nel vento, dopo un po' mette il
+   fiocco a collo da sola e lo libera quando la prua è caduta: è la stessa
+   manovra che il messaggio della panne suggerisce a parole.
+
+   **Molla appena tocchi qualcosa.** Barra, scotte, autotimoniere: al primo
+   comando umano la manovra si annulla e la barca è di nuovo tua, a metà
+   virata come in mare quando qualcuno mette una mano sulla ruota.       */
+let manovra=null;
+const MAN_SOGLIA=0.60;        // frazione della velocità di bolina sotto cui si rifiuta
+
+function manovraAvvia(){
+  if(manovra){manovraFine("Manovra annullata");return;}
+  if(game.pilot>=2){say("Governa l'autotimoniere: Z per riprendere la barra");return;}
+  const w=windAt(boat.x,boat.y);
+  const twa=norm(boat.h-w.from);                 // >0 = vento sulla sinistra della prua
+  const stramba=Math.abs(twa)>100*D2R;
+  const kn=Math.hypot(boat.vx,boat.vy);
+  if(!stramba){
+    const serve=andature(w.spd).bolina.v*MAN_SOGLIA;
+    if(kn<serve){
+      say("Troppo poco abbrivio per virare ("+(kn*1.94384).toFixed(1)+" nodi, ne servono "+
+          (serve*1.94384).toFixed(1)+") — poggia, prendi velocità e riprova");
+      return;
+    }
+  }
+  manovra={stramba, t:0, fase:"entra", collo:false,
+           // il bordo nuovo è speculare rispetto all'asse del vento
+           tgt:norm(w.from-twa), verso:stramba?Math.sign(twa||1):-Math.sign(twa||1),
+           trim0:boat.trim, jib0:boat.jib, auto0:game.auto};
+  game.auto=true;                                 // le vele le regola lei, finché dura
+  say(stramba?"Strambata in corso — sta' pronto al boma":"Virata in corso");
+}
+function manovraFine(msg){
+  if(!manovra)return;
+  if(manovra.collo)boat.jibBack=false;
+  game.auto=manovra.auto0;
+  if(!game.auto){boat.trim=manovra.trim0;boat.jib=manovra.jib0;}
+  boat.rudderCmd=boat.rudderTrim;                 // barra al cavallino, com'è la regola di tutta la barca
+  manovra=null;
+  if(msg)say(msg);
+}
+function manovraUpdate(dt){
+  if(!manovra)return;
+  manovra.t+=dt;
+  const w=windAt(boat.x,boat.y);
+  const twa=norm(boat.h-w.from), at=Math.abs(twa);
+  const kn=Math.hypot(boat.vx,boat.vy);
+  const err=norm(manovra.tgt-boat.h);
+  // arrivati: la prua è sul bordo nuovo e la barca ci sta sopra
+  if(Math.abs(err)<8*D2R && manovra.fase!=="entra"){
+    manovraFine(manovra.stramba?"Strambata fatta":"Virata fatta");return;
+  }
+  // passata dall'altra parte: da qui si governa sull'errore, non a barra dura
+  if(manovra.fase==="entra" && Math.sign(twa)===Math.sign(norm(manovra.tgt-w.from)) &&
+     at>12*D2R) manovra.fase="esce";
+  if(manovra.fase==="esce"){
+    boat.rudderCmd=clamp(err*3.4-boat.yawRate*6.5,-1,1);
+  }else{
+    boat.rudderCmd=manovra.verso;                 // tutta a una banda: si entra decisi
+    /* Piantata nel vento. Non basta un cronometro: in aria leggera una
+       virata onesta ne prende anche quaranta, di secondi. Serve che sia
+       ferma **e** ancora dentro il vento. */
+    if(!manovra.stramba && !manovra.collo && manovra.t>12 && kn<0.26 && at<30*D2R){
+      manovra.collo=true; boat.jibBack=true;
+      say("La prua non passa — fiocco a collo per farla cadere");
+    }
+    if(manovra.collo && at>60*D2R){ manovra.collo=false; boat.jibBack=false; }
+  }
+  if(manovra.t>180) manovraFine("Manovra abbandonata: non si passa, riprendi tu");
+}
+/* Se l'abbrivio di adesso basta a passare il vento. Lo sa il polare, e
+   finora non lo diceva a nessuno: è la stessa soglia che usa `O`, mostrata
+   prima di provarci invece che dopo aver fallito. */
+function virataPronta(){
+  const w=windAt(boat.x,boat.y);
+  const a=andature(w.spd);
+  if(!a||!a.bolina)return true;
+  return Math.hypot(boat.vx,boat.vy)>=a.bolina.v*MAN_SOGLIA;
+}
+
 function fmtT(s){const m=Math.floor(s/60);return String(m).padStart(2,"0")+":"+String(Math.floor(s%60)).padStart(2,"0")+"."+String(Math.floor(s*10%10));}
 
 /* ─ cavallino ─
@@ -662,6 +761,7 @@ function setCavallino(v){
    torna al cavallino e non al centro geometrico — è la regola di tutta la
    barca, altrimenti ogni raddrizzata cancellerebbe la regolazione. */
 function centraBarra(azzera){
+  if(manovra)manovraFine("Manovra interrotta — barra ripresa");
   if(azzera){boat.rudderTrim=0;boat.rudderCmd=0;}
   else boat.rudderCmd=boat.rudderTrim;
   if(game.pilot){game.pilot=0;say("Autotimoniere disinserito — "+(boat.rudderTrim?"barra al cavallino":"barra dritta"));}
@@ -719,6 +819,7 @@ function updateWind(dt){
 /* ══════════════════ input ══════════════════ */
 const keys=Object.create(null);
 function cyclePilot(){
+  if(manovra)manovraFine(null);     // il pilota e la manovra non governano insieme
   game.pilot=(game.pilot+1)%4;
   if(game.pilot===1) say("Barra con richiamo al centro — torna dritta se la molli");
   else if(game.pilot===2){game.pilotTgt=boat.h;say("Autotimoniere su ROTTA "+String(Math.round((boat.h*R2D+360)%360)).padStart(3,"0")+"°");}
@@ -804,6 +905,7 @@ function comando(k,shift){
     if(boat.jibFurled)say("Il fiocco è avvolto — premi F per issarlo");
     else{boat.jibBack=!boat.jibBack;say(boat.jibBack?"Fiocco a collo — la prua cade sottovento":"Fiocco liberato");}
   }
+  if(k==="o")manovraAvvia();
   if(k==="n")newWorld(semeNuovo());
   if(k==="t"){game.auto=!game.auto;say(game.auto?"Regolazione vele AUTOMATICA":"Regolazione vele manuale");}
   // + e − sono il ritmo di gioco: è quello che si cambia in continuazione —
@@ -828,6 +930,11 @@ function comando(k,shift){
 
 function input(dt){
   const L=keys["arrowleft"]||keys["a"], R=keys["arrowright"]||keys["d"];
+  /* Una mano sulla barra o sulle scotte annulla la manovra assistita, anche
+     a metà virata: chi tocca comanda. */
+  if(manovra&&(L||R||keys["arrowup"]||keys["arrowdown"]||keys["w"]||keys["s"]||
+               keys["q"]||keys["e"]||keys[","]||keys["."]))
+    manovraFine("Manovra interrotta — hai la barra");
   if(game.pilot>=2){
     // con l'autotimoniere inserito il timone corregge la ROTTA IMPOSTATA
     const r=26*D2R*dt;
@@ -1827,6 +1934,16 @@ function drawHUD(){
   ctx.restore();
   ctx.fillStyle=C("--chart-dim");ctx.font="9px ui-monospace,monospace";ctx.textAlign="center";
   ctx.fillText("VENTO APP "+Math.round(Math.abs(boat.beta*R2D))+"°"+(boat.beta>0?" DRITTA":" SIN"),cxr,cyr+R+22*rk+8);
+  /* Se con questo abbrivio si passa il vento. Lo sapeva già il polare e non
+     lo diceva a nessuno: la stessa soglia che usa la manovra assistita,
+     mostrata *prima* di provarci invece che dopo essere finiti in panne.
+     Si accende solo stringendo il vento, che è l'unica andatura in cui la
+     domanda ha senso — in poppa si stramba sempre. */
+  if(Math.abs(boat.beta)<70*D2R){
+    const ok=virataPronta();
+    ctx.fillStyle=ok?C("--good"):C("--warn");
+    ctx.fillText(ok?"● VIRATA: SI PASSA":"○ VIRATA: POCO ABBRIVIO",cxr,cyr+R+22*rk+20);
+  }
   }
 
   /* ── regolazione / timone / sbandamento, in basso a sinistra */
@@ -4637,6 +4754,7 @@ function frame(now){
     const sdt=dt*timeScale;                              // il tempo simulato scorre più in fretta
     game.t+=sdt;
     input(sdt);
+    manovraUpdate(sdt);        // prima dell'autotimoniere: se governa lei, l'altro non c'è
     autopilot(sdt);
     updateWind(sdt);
     trimWindows();

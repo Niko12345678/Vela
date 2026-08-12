@@ -9,6 +9,41 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
 
 ## Non rilasciato
 
+### Aggiunto
+- **`O`: la manovra assistita, e l'indicatore che dice se si passa.**
+  Virare era la cosa più difficile da azzeccare, e il motivo è che non
+  c'era modo di *sapere* se sarebbe riuscita: si provava, e se l'abbrivio
+  non bastava ci si ritrovava in panne senza aver capito cosa si era
+  sbagliato. Ora un tasto solo porta la barca dall'altro bordo — vira se si
+  sta stringendo il vento, stramba se si sta scendendo — e accanto alla
+  rosa dei venti c'è una spia che dice, **prima** di provarci, se con
+  questo abbrivio il vento si passa.
+  Non è un aiuto magico e non è un secondo autotimoniere: scrive soltanto
+  su barra e scotte, cioè esattamente quello che ha sotto mano chi governa,
+  e la fisica non sa nemmeno che esiste. Chi vuole virare a mano fa come
+  prima; questo è il timoniere esperto che ti fa vedere come.
+  Tre cose la tengono onesta. **Rifiuta quando non si passa**, perché un
+  aiuto che ti porta in panne è peggio di nessun aiuto: la soglia è il 60 %
+  della velocità di bolina che il polare dà con quel vento e quella barca,
+  ed è una frazione e non un numero fisso perché il caso vero lo chiede —
+  misurato sullo sloop, con 7 m/s si passa perfino a un nodo (in 36
+  secondi), mentre con 14 m/s a tutto ferro sotto i tre nodi **non si passa
+  affatto**. **Sa rimediare**: se la prua si pianta nel vento mette il
+  fiocco a collo da sola e lo libera quando è caduta, che è la manovra che
+  il messaggio della panne suggeriva a parole. E **molla appena tocchi
+  qualcosa** — barra, scotte, autotimoniere, o `O` di nuovo — perché chi
+  tocca comanda, anche a metà virata.
+  Misurata su tutta la flotta: la virata riesce fra gli 8,8 e i 25 secondi
+  dal gozzo al cutter, con 5, 7 e 12 m/s, e la barca esce sempre con
+  l'abbrivio addosso. Il tasto è anche nella pulsantiera a dito, come
+  *Vira*.
+  La spia non costa niente di nuovo: la soglia la sapeva già il polare, e
+  finora non la diceva a nessuno.
+- `test/virata.test.js`: la manovra su quattro barche e tre venti, la
+  strambata che non è una virata, il rifiuto con la barca ferma e con 27
+  nodi a tutto ferro, i quattro modi di annullarla, e l'indicatore che deve
+  dire sempre la stessa cosa che poi farà la manovra.
+
 ### Corretto
 - **Lenti e stretti al vento, ora la barra serve a qualcosa.** C'era una
   sproporzione nascosta fra il timone e le vele. Rallentando, la pala
