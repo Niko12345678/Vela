@@ -179,3 +179,85 @@ test("l'indicatore dice la stessa cosa che farà la manovra", async () => {
     assert.ok(r.soglie[i] > r.soglie[i-1],
       "la soglia deve crescere col vento, come la velocità di bolina");
 });
+
+test("da quattro nodi si vira anche col vento di punta della giornata", async () => {
+  /* Questo test nasce da un reclamo: «sono partito con una virata che ero
+     a 4 nodi e sono andato in panne». Non era la fisica della virata — è
+     misurata identica a prima — era il meteo, che col cursore su 7 m/s
+     portava il pomeriggio a 27 nodi perché il rinforzo si moltiplicava
+     con le raffiche. A 27 nodi con tutto ferro la barca non vira, ed è
+     giusto così; il difetto era arrivarci senza volerlo, partendo da un
+     cursore che ne dichiarava tredici.
+     Qui si fissa il contratto: al peggio che la giornata può produrre —
+     culmine del pomeriggio più raffica piena — una virata da quattro nodi
+     deve ancora riuscire. */
+  const r = await runInGame(MONDO + `
+    setBarca("crociera11");
+    windBase = 7; assist = 0.55; meteoSemina("punta");
+    // il peggio della giornata: culmine del pomeriggio con la raffica piena
+    meteoDin = true;
+    let punta = 0;
+    for (let i = 0; i < 24*20; i++) {
+      game.t = i*GIORNO/(24*20);
+      punta = Math.max(punta, ventoAl(game.t).spd*(1+0.46*(0.5+assist*0.5)));
+    }
+    meteoDin = false; gusts = [];
+    const vira = (vento, reef) => {
+      windBase = vento;
+      const v = 4/1.94384, f = dv(45*D2R);
+      boat.x=0;boat.y=0;boat.vx=f.x*v;boat.vy=f.y*v;boat.h=45*D2R;
+      boat.heel=0;boat.yawRate=0;boat.stuck=0;boat.spPrec=0;boat.sbanda=0;boat.gtime=0;
+      boat.jibBack=false;boat.jibFurled=false;boat.spi=false;boat.reef=reef;
+      boat.rudder=0;boat.rudderTrim=0;boat.rudderCmd=-1;
+      game.auto=true;game.pilot=0;game.t=0;game.msgT=99;
+      trimWindows();
+      for (let i=0;i<90*60;i++){
+        trimWindows(); physics(1/120); physics(1/120); game.t+=1/60;
+        if (norm(boat.h-windDirBase)*R2D < -35 && Math.hypot(boat.vx,boat.vy)*1.94384 > 1.5) return i/60;
+      }
+      return null;
+    };
+    report({ punta: punta*1.94384, rif: 7*1.94384,
+             ferro: vira(punta,0), unaMano: vira(punta,1) });
+  `);
+  assert.ok(r.punta < r.rif*1.9,
+    `il peggio della giornata non deve arrivare al doppio del cursore: ${r.rif.toFixed(1)} -> ${r.punta.toFixed(1)} kn`);
+  assert.ok(r.ferro !== null && r.ferro < 20,
+    `a ${r.punta.toFixed(1)} kn una virata da 4 nodi deve riuscire anche a tutto ferro (ottenuto ${r.ferro})`);
+  assert.ok(r.unaMano !== null && r.unaMano < r.ferro,
+    "e terzarolando deve venire meglio, che è la ragione per cui si terzarola");
+});
+
+test("quando c'è troppa tela il gioco lo dice, e tace appena terzaroli", async () => {
+  const r = await runInGame(MONDO + `
+    setBarca("crociera11"); meteoDin = false;
+    /* A rotta bloccata, cioè la barca che sta navigando di bolina: è lì
+       che l'avviso deve arrivare, *prima* che la barca straorzi. Lasciata
+       libera a quindici metri al secondo si mette dritta nel vento, le
+       vele fileggiano e lo sbandamento crolla — a quel punto è già tardi
+       e non c'è più niente da segnalare. */
+    const prova = (vento, reef) => {
+      windBase = vento;
+      boat.x=0;boat.y=0;boat.vx=0;boat.vy=0;boat.h=45*D2R;boat.heel=0;boat.yawRate=0;
+      boat.stuck=0;boat.spPrec=0;boat.sbanda=0;boat.gtime=0;
+      boat.jibBack=false;boat.jibFurled=false;boat.spi=false;boat.reef=reef;
+      boat.rudderCmd=0;boat.rudderTrim=0;
+      game.auto=true;game.pilot=0;game.t=0;game.msg="";game.msgT=0;
+      let detto = "";
+      for (let i=0;i<90*60;i++){
+        const h = boat.h;
+        trimWindows(); physics(1/120); physics(1/120); boat.h = h; game.t+=1/60;
+        game.msgT = 0;                          // gli avvisi non si accodano
+        if (/terzarolare/i.test(game.msg)) { detto = game.msg; break; }
+      }
+      return { detto, heel: Math.abs(boat.heel) };
+    };
+    report({ calmo: prova(7,0), forte: prova(15,0), forteTerzarolato: prova(15,2) });
+  `);
+  assert.equal(r.calmo.detto, "",
+    `con sette metri al secondo non c'è niente da terzarolare (sbandamento ${r.calmo.heel.toFixed(2)})`);
+  assert.match(r.forte.detto, /terzarolare/i,
+    `con quindici sì, e va detto (sbandamento ${r.forte.heel.toFixed(2)})`);
+  assert.equal(r.forteTerzarolato.detto, "",
+    `ma con due mani prese deve tacere: l'avviso chiede una cosa sola, e va tolto quando è fatta (sbandamento ${r.forteTerzarolato.heel.toFixed(2)})`);
+});

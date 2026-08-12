@@ -191,7 +191,7 @@ const boat={x:0,y:0,vx:0,vy:0,h:0,
   trim:45*D2R, jib:35*D2R,                      // scotte: randa e fiocco
   rudder:0, rudderCmd:0, rudderTrim:0, yawRate:0,   // barra: comando, cavallino (il neutro) e pala (con inerzia)
   boomSide:1, boomDraw:Math.PI, jibDraw:Math.PI, jibSide:1, butterfly:false,
-  jibFurled:false, jibBack:false, spi:false, spiLimp:false, reef:0, stuck:0, spPrec:0, gtime:0,
+  jibFurled:false, jibBack:false, spi:false, spiLimp:false, reef:0, stuck:0, spPrec:0, sbanda:0, gtime:0,
   wM:{opt:0,lo:0,hi:90*D2R,maxT:90*D2R}, wJ:{opt:0,lo:0,hi:80*D2R,maxT:80*D2R},
   heel:0, luff:0, luffJ:0, aoa:0, aoaJ:0, balance:0, beta:0, grounded:0, wake:[]};
 const game={paused:false,auto:false,zoom:3.4,t:0,started:false,clock:0,next:0,done:null,
@@ -251,8 +251,18 @@ let streakVis=1;   // visibilità dei tratteggi del vento
    sotto. */
 let meteoDin=false;
 let meteoFasi=[0,0];
-const METEO_MIN=0.68;          // quanto resta del vento di riferimento nel cuore della notte
-const METEO_MAX=1.40;          // e quanto ne fa la brezza al culmine del pomeriggio
+/* Quanto resta del vento di riferimento nel cuore della notte, e quanto
+   ne fa la brezza al culmine del pomeriggio. Sono più vicini a 1 di quanto
+   verrebbe da scrivere, e il motivo è che **si moltiplicano con le
+   raffiche**: col cursore su 7 m/s una raffica piena vale già il 45% in
+   più, e un culmine a 1,40 portava il pomeriggio a 27 nodi da un cursore
+   che ne dichiarava 13. A quel punto la barca a tutto ferro non vira più —
+   provato, 37 secondi o la panne — e chi aveva impostato «7» non capiva
+   perché. A 1,26 il peggio che può capitare sono 25 nodi, che è una brezza
+   forte ma governabile, e con una mano di terzaroli si vira in nove
+   secondi. La media della giornata resta quella del cursore. */
+const METEO_MIN=0.78;
+const METEO_MAX=1.26;
 const METEO_ROT=20*D2R;        // di quanto gira la brezza fra la notte e il pomeriggio
 const METEO_REGIME=15*D2R;     // e di quanto la fa girare il regime, in giorni
 function meteoSemina(seedStr){
@@ -286,7 +296,7 @@ function resetBoat(){
   }
   boat.h=bh;
   boat.trim=45*D2R;boat.jib=35*D2R;boat.rudder=0;boat.rudderCmd=0;boat.rudderTrim=0;boat.yawRate=0;
-  boat.jibFurled=false;boat.jibBack=false;boat.spi=false;boat.reef=0;boat.stuck=0;boat.spPrec=0;boat.gtime=0;
+  boat.jibFurled=false;boat.jibBack=false;boat.spi=false;boat.reef=0;boat.stuck=0;boat.spPrec=0;boat.sbanda=0;boat.gtime=0;
   game.pilot=0;boat.wake.length=0;boat.grounded=0;
   game.clock=0;game.next=0;game.started=false;game.done=null;
   // la rotta pianificata resta — è un disegno del marinaio, non uno stato
@@ -631,6 +641,22 @@ function physics(dt){
      senza esserci — e soprattutto la barca che *sta accelerando* non è ferma,
      è solo partita da poco. Da qui il confronto con la velocità del passo
      prima: se sta guadagnando, il cronometro della panne non parte. */
+  /* Troppa tela. Il gioco lo sapeva già — la barca si corica, straorza e
+     smette di virare — ma non lo diceva a nessuno, e chi non conosce le
+     barche legge quel comportamento come «la barca non funziona» invece
+     che come «riduci». Da quando il vento rinforza col pomeriggio la
+     differenza si sente eccome: la stessa uscita che al mattino era
+     tranquilla, alle tre non vira più.
+     La soglia è misurata, non scelta: lo sbandamento dello sloop passa
+     0,62 di bolina intorno ai 13 m/s a tutto ferro, che è esattamente il
+     vento a cui la virata comincia a non riuscire; con due mani a 16 m/s
+     resta sotto, quindi l'avviso tace appena hai fatto quello che dice. */
+  if(Math.abs(boat.heel)>0.62 && boat.reef<K.REEF.length-1) boat.sbanda+=dt;
+  else boat.sbanda=0;
+  if(boat.sbanda>4 && game.msgT<=0){
+    boat.sbanda=0;                                   // e non lo ripete di continuo
+    say("Troppa tela per questo vento — X per terzarolare: si va più forte e si torna a virare");
+  }
   const spNow=Math.hypot(boat.vx,boat.vy);
   const accelera=spNow>boat.spPrec+1e-4;
   boat.spPrec=spNow;

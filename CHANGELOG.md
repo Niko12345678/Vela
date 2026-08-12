@@ -9,6 +9,36 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
 
 ## Non rilasciato
 
+### Corretto
+- **Il pomeriggio non arriva più a raddoppiare il vento impostato.** Da un
+  reclamo preciso: «sono partito con una virata che ero a 4 nodi e sono
+  andato in panne». La virata non c'entrava — misurata prima e dopo tutte
+  le modifiche di questi giorni, da 4 nodi impiega 8,3 secondi identici. Il
+  guaio era il meteo: il rinforzo del pomeriggio **si moltiplicava con le
+  raffiche**, e col cursore su 7 m/s — tredici nodi e mezzo — il culmine
+  con una raffica piena toccava i **27,5 nodi**. A 27 nodi con tutto ferro
+  la barca non vira, e fa bene a non virare; il difetto era arrivarci senza
+  averlo deciso, partendo da un cursore che ne dichiarava tredici.
+  Il culmine scende da 1,40 a 1,26 volte il riferimento e la notte sale da
+  0,68 a 0,78, così la media della giornata resta quella del cursore ma il
+  peggio che può capitare sono **24,8 nodi**: una brezza forte e
+  governabile, dove la stessa virata da 4 nodi riesce in 9,7 secondi a
+  tutto ferro e in 7,8 con una mano di terzaroli.
+- **Quando c'è troppa tela, adesso il gioco lo dice.** Lo sapeva già — la
+  barca si corica, straorza e smette di virare — ma non lo diceva a
+  nessuno, e chi non conosce le barche legge quel comportamento come «la
+  barca non funziona» invece che come «riduci». Da quando il vento
+  rinforza col pomeriggio la differenza si sente eccome: la stessa uscita
+  che al mattino era tranquilla, alle tre non vira più. La soglia è
+  misurata e non scelta — lo sbandamento dello sloop passa 0,62 di bolina
+  intorno ai 13 m/s a tutto ferro, che è esattamente il vento a cui la
+  virata comincia a non riuscire — e l'avviso tace appena hai preso la
+  mano che chiedeva.
+- `test/virata.test.js` guadagna il reclamo trasformato in contratto: al
+  peggio che la giornata può produrre, una virata da quattro nodi deve
+  ancora riuscire, e terzarolando deve venire meglio. Più l'avviso della
+  tela, che deve arrivare col vento forte e tacere a mano presa.
+
 ### Aggiunto
 - **Il giorno e la notte si vedono.** La luce segue l'ora di bordo:
   all'alba il mare si scalda d'arancio, a mezzogiorno la luce è piena, al
