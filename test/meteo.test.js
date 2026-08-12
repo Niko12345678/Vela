@@ -210,3 +210,79 @@ test("il meteo acceso sopravvive a un F5, con la sua giornata", async () => {
   assert.ok(r.scartoDir < 1e-9,
     `direzione compresa: sono le fasi del regime, che vanno riseminate dal seme (scarto ${r.scartoDir})`);
 });
+
+test("la previsione è esatta, non stimata: è la stessa formula più avanti", async () => {
+  /* Il motivo per cui vale la pena pretendere che il meteo sia una
+     funzione pura del cronometro. Qui si guarda la previsione, poi si
+     lascia scorrere il tempo fino a quell'ora, e si controlla che il
+     vento sia proprio quello: non «vicino», identico. */
+  const r = await runInGame(MONDO + `
+    meteoSemina("previsione"); meteoDin = true; oraPartenza = 5*3600;
+    game.t = 0;
+    const detto = [];
+    for (let i = 0; i < 12; i++) {
+      const v = ventoAl(game.t + i*ORA_GIOCO);
+      detto.push([v.from, v.spd]);
+    }
+    // adesso il tempo passa davvero, un'ora per volta
+    const avvenuto = [];
+    for (let i = 0; i < 12; i++) {
+      game.t = i*ORA_GIOCO;
+      const v = ventoAl(game.t);
+      avvenuto.push([v.from, v.spd]);
+    }
+    report({ detto, avvenuto });
+  `);
+  for (let i = 0; i < r.detto.length; i++) {
+    assert.equal(r.detto[i][0], r.avvenuto[i][0],
+      `la direzione prevista per fra ${i} ore deve essere quella che poi arriva`);
+    assert.equal(r.detto[i][1], r.avvenuto[i][1],
+      `e così la forza`);
+  }
+});
+
+test("la previsione racconta la giornata: il pomeriggio si vede arrivare", async () => {
+  const r = await runInGame(MONDO + `
+    meteoSemina("previsione"); meteoDin = true; oraPartenza = 6*3600;
+    game.t = 0;
+    const p = [];
+    for (let i = 0; i < 12; i++) {
+      const t = game.t + i*ORA_GIOCO;
+      p.push({ h: Math.floor(oraHDi(t)), kn: ventoAl(t).spd*1.94384 });
+    }
+    report({ p });
+  `);
+  const alle = h => r.p.find(q => q.h === h);
+  assert.ok(alle(6) && alle(15), "la previsione deve coprire dalle sei alle quindici");
+  assert.ok(alle(15).kn > alle(6).kn * 1.4,
+    `partendo all'alba, la previsione deve già mostrare il rinforzo del pomeriggio: ${alle(6).kn.toFixed(1)} -> ${alle(15).kn.toFixed(1)} kn`);
+  assert.ok(r.p.every(q => Number.isFinite(q.kn) && q.kn > 0),
+    "e ogni ora deve avere un vento vero");
+});
+
+test("il cielo segue l'ora, e non spegne mai del tutto la luce", async () => {
+  const r = await runInGame(MONDO + `
+    oraPartenza = 0;
+    const a = {};
+    for (let h = 0; h < 24; h++) { game.t = h*GIORNO/24; a[h] = tintaDelCielo(); }
+    // e mezz'ora per volta, per stanare i salti
+    const alfa = [];
+    for (let i = 0; i < 48; i++) {
+      game.t = i*GIORNO/48;
+      const c = tintaDelCielo();
+      alfa.push(c ? Number(c.split(",")[3].replace(")","")) : 0);
+    }
+    report({ a, alfa });
+  `);
+  assert.equal(r.a[12], null, "a mezzogiorno non si vela niente");
+  assert.ok(r.a[2] !== null && r.a[22] !== null, "di notte sì");
+  assert.ok(r.a[6] !== null, "e all'alba pure");
+  const max = Math.max(...r.alfa);
+  assert.ok(max <= 0.45,
+    `la notte non deve mai diventare una schermata nera (velatura massima ${max})`);
+  assert.ok(r.alfa.some(v => v === 0), "e di giorno deve sparire del tutto");
+  // nessun salto: fra due mezz'ore vicine la velatura cambia poco
+  for (let i = 1; i < r.alfa.length; i++)
+    assert.ok(Math.abs(r.alfa[i] - r.alfa[i-1]) < 0.12,
+      `il cielo deve cambiare senza scatti (salto di ${Math.abs(r.alfa[i]-r.alfa[i-1]).toFixed(3)} fra due mezz'ore)`);
+});

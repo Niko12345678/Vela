@@ -10,6 +10,37 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
 ## Non rilasciato
 
 ### Aggiunto
+- **Il giorno e la notte si vedono.** La luce segue l'ora di bordo:
+  all'alba il mare si scalda d'arancio, a mezzogiorno la luce è piena, al
+  tramonto vira al rosso e poi al viola del crepuscolo, di notte resta un
+  blu profondo. Segue l'**orologio** e non la casella del meteo, perché il
+  giorno e la notte ci sono comunque, anche col vento fermo — ed è la metà
+  del ciclo che si chiedeva.
+  Due scelte che non sono grafica. La velatura si stende **sopra il mare e
+  sotto gli strumenti**: vela le terre, i tratteggi del vento e la barca,
+  perché è l'aria che ci sta in mezzo, ma lascia gli strumenti a piena
+  luce, che è come stanno in barca di notte e l'unico modo perché restino
+  leggibili. E il nero pieno non arriva mai: al culmine della notte resta
+  una velatura al 38 %, perché una schermata nera non è un gioco.
+- **La previsione delle prossime dodici ore**, in fondo alla carta
+  nautica: una freccia per ogni ora che verrà, con direzione e forza, e le
+  ore ventose in evidenza. **Non è una stima** — è la stessa formula del
+  vento valutata più avanti nel tempo, quindi quello che mostra è
+  esattamente quello che si troverà. Un collaudo lo verifica nel modo più
+  diretto che ci sia: legge la previsione, poi lascia scorrere il tempo
+  fino a quell'ora e controlla che il vento sia identico, non «vicino».
+  È il regalo nascosto dell'aver preteso che il meteo fosse una funzione
+  pura del cronometro invece di qualcosa che si integra: la previsione non
+  è costata una riga di motore, solo il disegno. Serve dove si decide
+  davvero — sulla carta, guardando se conviene partire adesso o aspettare:
+  all'alba si vede già arrivare il rinforzo del pomeriggio, e una tratta di
+  bolina conviene farla prima che il vento giri.
+- `test/meteo.test.js` guadagna tre prove: la previsione confrontata con
+  quello che poi succede, ora per ora; la giornata che si vede arrivare
+  dalla previsione dell'alba; e il cielo che segue l'ora senza scatti fra
+  una mezz'ora e l'altra e senza mai spegnere del tutto la luce.
+
+### Aggiunto
 - **Il vento vive con le ore — «Meteo vivo» nel menù.** Si alza col sole,
   culmina nel primo pomeriggio, cala la sera e resta leggero di notte, e
   intanto ruota: la brezza col sole nell'arco della giornata, il regime più
