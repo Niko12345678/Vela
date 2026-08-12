@@ -10,6 +10,47 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
 ## Non rilasciato
 
 ### Aggiunto
+- **Il vento vive con le ore — «Meteo vivo» nel menù.** Si alza col sole,
+  culmina nel primo pomeriggio, cala la sera e resta leggero di notte, e
+  intanto ruota: la brezza col sole nell'arco della giornata, il regime più
+  lentamente di giorno in giorno. Con 7 m/s impostati si va dagli 8,6 nodi
+  dell'alba ai 20 del pomeriggio, con una media di giornata a 12,9 — il
+  95 % del cursore, che quindi continua a dire più o meno quello che
+  promette, ma da adesso come **riferimento della giornata** e non come il
+  vento di quel momento. È il motivo per cui conviene guardare l'ora prima
+  di partire: la stessa traversata alle sei del mattino e alle tre del
+  pomeriggio non è la stessa traversata.
+  **Nasce spento**, e il valore predefinito è scritto nel codice invece che
+  letto dalla casella apposta: il DOM finto del collaudo risponde
+  `checked = true` a qualunque elemento, e un default preso di lì tornerebbe
+  acceso in tutti i test. Spento, la catena è l'identità — verificato
+  confrontando direzione e velocità con la formula di sempre scritta a mano
+  nel collaudo, cifra per cifra — e infatti **la golden test non ha dovuto
+  cambiare una riga**.
+  Non è un tiro di dadi: niente `Math.random`, tutto è funzione del
+  cronometro e del seme, quindi la stessa parola rifà la stessa giornata e
+  un collaudo può verificarla. Il costo per campione è zero, perché si
+  calcola dentro la cache del vento di fondo, una volta per fotogramma:
+  misurato, 200 000 campioni costano quanto prima.
+- `test/meteo.test.js`: spento identico alla formula di sempre cifra per
+  cifra, la brezza col verso e il culmine giusti, la media della giornata
+  vicina al cursore, la direzione che gira quanto basta a farsi notare ma
+  non tanto da rendere irriconoscibile la carta, stessa parola stessa
+  giornata, il costo per campione, il giro salva-e-riprendi, e — il più
+  utile di tutti — **il ritmo di gioco che non cambia il risultato col
+  meteo acceso**, che è il modo di accorgersi se un giorno il meteo
+  smettesse di essere una funzione del tempo per diventare qualcosa che si
+  integra passo per passo.
+
+### Corretto
+- **Le fasi del regime entrano nella sessione invece di essere ridedotte
+  dal seme.** Sono due numeri, e ricavarli dal seme era un filo teso fra
+  due cose che possono divergere: la carta è costruita con una parola, il
+  campo di testo ne mostra un'altra, e la giornata ripresa non era più
+  quella di prima. L'ha trovato il collaudo del ricaricamento, non il
+  ragionamento.
+
+### Aggiunto
 - **L'ora di bordo.** Nel riquadro di velocità e vento compare che ora è e
   in che fase sta il cielo — alba, giorno, tramonto, notte — e dal secondo
   giorno anche quale. Non è un orologio a parte e non introduce una seconda

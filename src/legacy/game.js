@@ -227,6 +227,42 @@ const MINI_LATO=168, MINI_ZMAX=12;
 let windBase=7, windDirBase=200*D2R, gusts=[], streaks=[];
 let assist=0.55;   // 0.55 = mare facile, 1 = pieno
 let streakVis=1;   // visibilità dei tratteggi del vento
+
+/* ── il vento che gira con le ore ──
+   Spento di serie, si accende dalla casella «Meteo vivo» del menù. Il
+   valore predefinito è scritto **qui** e non letto dalla casella apposta:
+   il DOM finto del collaudo risponde `checked = true` a qualunque
+   elemento, e un default preso di lì tornerebbe acceso in tutti i test.
+   Spento, tutta la catena qui sotto è l'identità e il vento è quello di
+   sempre, bit per bit.
+
+   Tre strati, tutti funzione del cronometro e del seme — nessun
+   `Math.random`, quindi la stessa parola rifà la stessa giornata e un
+   collaudo può verificarla:
+
+   1. il **regime**, che gira lentamente in giorni, e viene dal seme;
+   2. la **brezza termica**, che si alza col sole, culmina nel primo
+      pomeriggio e ruota con lui: è l'effetto che si sente davvero
+      navigando sottocosta d'estate;
+   3. la **calma della notte**, che è la stessa brezza al minimo.
+
+   Il cursore «Vento» smette quindi di essere *il* vento e diventa il vento
+   di riferimento della giornata: il pomeriggio si va sopra, la notte
+   sotto. */
+let meteoDin=false;
+let meteoFasi=[0,0];
+const METEO_MIN=0.68;          // quanto resta del vento di riferimento nel cuore della notte
+const METEO_MAX=1.40;          // e quanto ne fa la brezza al culmine del pomeriggio
+const METEO_ROT=20*D2R;        // di quanto gira la brezza fra la notte e il pomeriggio
+const METEO_REGIME=15*D2R;     // e di quanto la fa girare il regime, in giorni
+function meteoSemina(seedStr){
+  const rng=mulberry32(hashStr(String(seedStr)+"|meteo"));
+  meteoFasi=[rng()*TAU,rng()*TAU];
+}
+/* La brezza del momento: 0 nel cuore della notte, 1 al culmine. Sale col
+   sole a partire dalle otto e si spegne verso le dieci di sera — non è
+   astronomia, è la forma che ha una giornata di vento in Mediterraneo. */
+const meteoBrezza=h=>Math.max(0,Math.sin(Math.PI*(h-8)/14));
 /* Scala del tempo: tutto accelera insieme, le proporzioni restano. La
    scaletta è la stessa della tendina «Ritmo» del menù e dei tasti + e −,
    così i due comandi non si contraddicono; `0` riporta al tempo reale.
@@ -277,6 +313,7 @@ function semeNuovo(){
 }
 function newWorld(seedStr){
   world=mapMode==="ionio"?ionianWorld():genWorld(seedStr);
+  meteoSemina(seedStr);                 // stessa parola, stessa giornata di vento
   MARK_R=clamp(world.size/130,45,150);
   pianoAzzera(true);                    // altra carta, altri punti: la rotta vecchia non vuol dire niente
   fillPorts();
@@ -309,12 +346,23 @@ let shadeDir={x:0,y:1};     // direzione in cui soffia, aggiornata una volta per
    `windAt` va chiamata anche da chi il ciclo non lo fa girare — il
    consiglio di rotta, il collaudo — e deve dare la risposta giusta lo
    stesso, senza che nessuno si ricordi di aggiornare prima qualcosa. */
-let ventoT=NaN, ventoB=NaN, ventoD=NaN, ventoFrom=0, ventoSpd=0;
+let ventoT=NaN, ventoB=NaN, ventoD=NaN, ventoM=null, ventoFrom=0, ventoSpd=0;
 function ventoBase(){
-  if(game.t===ventoT&&windBase===ventoB&&windDirBase===ventoD) return;
-  ventoT=game.t; ventoB=windBase; ventoD=windDirBase;
+  if(game.t===ventoT&&windBase===ventoB&&windDirBase===ventoD&&meteoDin===ventoM) return;
+  ventoT=game.t; ventoB=windBase; ventoD=windDirBase; ventoM=meteoDin;
   ventoFrom=windDirBase+Math.sin(game.t*0.07)*6*D2R+Math.sin(game.t*0.021+1.7)*4*D2R;
   ventoSpd=windBase*(1+0.07*Math.sin(game.t*0.12+0.6));
+  /* Il meteo vivo si somma qui, dove costa una volta per fotogramma invece
+     che una per campione. Spento, non tocca niente. */
+  if(meteoDin){
+    const h=oraH(), br=meteoBrezza(h);
+    ventoSpd*=METEO_MIN+(METEO_MAX-METEO_MIN)*br;
+    // la brezza ruota col sole; il regime la porta a spasso in giorni
+    ventoFrom+=METEO_ROT*Math.sin((h-14)/24*TAU)
+              +METEO_REGIME*Math.sin(game.t/(GIORNO*3)*TAU+meteoFasi[0])
+              +METEO_REGIME*0.55*Math.sin(game.t/(GIORNO*7)*TAU+meteoFasi[1]);
+    ventoFrom=norm(ventoFrom);
+  }
 }
 function windAt(x,y){
   ventoBase();
@@ -2519,6 +2567,11 @@ document.getElementById("wind").oninput=e=>{
   windBase=parseFloat(e.target.value);
   document.getElementById("windv").textContent=windBase.toFixed(1)+" m/s";
 };
+document.getElementById("meteo").onchange=e=>{
+  meteoDin=e.target.checked;
+  say(meteoDin?"Meteo vivo — il vento gira e rinforza con le ore, il cursore è la media della giornata"
+             :"Meteo fermo — il vento resta quello del cursore");
+};
 
 /* ══════════════════ rotta pianificata ══════════════════ */
 /* La rotta a matita sulla carta: una spezzata di punti segnati col mouse
@@ -4382,7 +4435,11 @@ function sessioneCorrente(){
        comunque la differenza fra ritrovare la bolina dov'era e ritrovarsela
        da rifare. `t` è il cronometro, da cui discende l'ora di bordo. */
     tempo:{t:game.t, ora0:oraPartenza},
-    vento:{dir:windDirBase, base:windBase},
+    /* Le fasi del regime si salvano invece di ridedurle dal seme. Sono due
+       numeri, e la deduzione era un filo teso fra due cose che possono
+       divergere: la carta è costruita con un seme, il campo di testo ne
+       mostra un altro, e la giornata ripresa non era più quella. */
+    vento:{dir:windDirBase, base:windBase, meteo:meteoDin, fasi:meteoFasi.slice()},
     scafo:{x:boat.x,y:boat.y,h:boat.h,vx:boat.vx,vy:boat.vy,
            trim:boat.trim,jib:boat.jib,barra:boat.rudderTrim,
            reef:boat.reef,spi:boat.spi,fiocco:boat.jibFurled},
@@ -4440,6 +4497,12 @@ function riprendiSessione(s){
   oraPartenza=((num(tm.ora0,8*3600)%86400)+86400)%86400;
   windDirBase=norm(num(ve.dir,windDirBase));
   windBase=clamp(num(ve.base,windBase),2,16);
+  meteoDin=!!ve.meteo;
+  const mEl=document.getElementById("meteo"); if(mEl)mEl.checked=meteoDin;
+  // le fasi del regime, se la fotografia le porta; altrimenti dal seme
+  if(Array.isArray(ve.fasi)&&ve.fasi.length===2&&ve.fasi.every(v=>Number.isFinite(Number(v))))
+    meteoFasi=ve.fasi.map(Number);
+  else meteoSemina(seme||semeCorrente());
   const wEl=document.getElementById("wind"), wVal=document.getElementById("windv");
   if(wEl)wEl.value=String(windBase);
   if(wVal)wVal.textContent=windBase.toFixed(1)+" m/s";
