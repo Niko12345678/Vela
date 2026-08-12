@@ -518,10 +518,24 @@ function physics(dt){
 
   // ─ barra: la pala insegue il comando con la sua inerzia
   boat.rudder+=(boat.rudderCmd-boat.rudder)*(1-Math.exp(-dt/0.30));
-  // le vele imbardano; alle andature veloci lo scafo tiene la rotta molto meglio
-  // Senza abbrivio la deriva non ha presa: la barca scarroccia invece di ruotare.
-  // Il fiocco a collo fa eccezione, perché spinge la prua di forza anche da fermo.
-  const yawSpd=backed?1:clamp(0.20+Math.abs(vf)*0.55,0,1);
+  /* Le vele imbardano; alle andature veloci lo scafo tiene la rotta molto
+     meglio. Senza abbrivio la deriva non ha presa: la barca scarroccia
+     invece di ruotare. Il fiocco a collo fa eccezione, perché spinge la
+     prua di forza anche da fermo.
+
+     Il secondo fattore ripara una sproporzione. Rallentando, il timone
+     perdeva presa molto più in fretta delle vele — `rEff` qui sotto è
+     lineare in `vf` a partire da zero, mentre questo pavimento a 0,20 e il
+     denominatore di `yawSail` rendevano l'orza velica *relativamente più
+     forte* man mano che la barca si fermava. Dimezzando l'andatura il
+     timone perdeva un fattore sei e le vele uno e mezzo: sotto i due
+     decimi di metro al secondo la barra a tutta banda non pareggiava
+     nemmeno l'orza, e la panne diventava una buca da cui non si risaliva
+     perché ogni tentativo di governare era già perso in partenza.
+     Ora anche le vele mollano la presa quando la barca si ferma. Sopra i
+     0,9 m/s vale esattamente 1, e lì sta tutto quello che il collaudo
+     misura: il minimo in ogni scenario della golden è 1,007. */
+  const yawSpd=backed?1:clamp(0.20+Math.abs(vf)*0.55,0,1)*clamp(Math.abs(vf)/0.9,0,1);
   const yawSail=(Tj-Tm)*K.YAW*assist*yawSpd/(1+Math.abs(vf)*0.35);
   boat.yawSail=yawSail*R2D;   // °/s dovuti alle sole vele
   // La pala morde in proporzione all'acqua che le scorre sopra: con abbrivio

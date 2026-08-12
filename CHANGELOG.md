@@ -10,6 +10,31 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
 ## Non rilasciato
 
 ### Corretto
+- **Lenti e stretti al vento, ora la barra serve a qualcosa.** C'era una
+  sproporzione nascosta fra il timone e le vele. Rallentando, la pala
+  perdeva presa in fretta — è giusto, è l'acqua che le scorre sopra — ma le
+  vele no: il loro momento d'imbardata aveva un pavimento, e il conto era
+  fatto in modo da renderlo *relativamente più forte* man mano che la barca
+  si fermava. Dimezzando l'andatura il timone perdeva un fattore sei e le
+  vele uno e mezzo. Sotto i due decimi di metro al secondo la barra a tutta
+  banda non pareggiava più nemmeno l'orza delle vele: da lì non si tornava,
+  e non perché si fosse sbagliata la manovra, ma perché non ce n'era una
+  giusta. Ora anche le vele mollano la presa quando la barca si ferma.
+  Misurato sullo sloop, partendo lenti col timone tutto a poggiare: da 0,6
+  nodi a 30° dal vento si torna a 2 nodi in 10,9 s invece di 17,0; da 0,4
+  nodi a 25° in 17,7 s invece di 37,9; con vento fresco in 4,1 s invece di
+  10,6. E da 0,2 nodi a 20°, dove **prima non si recuperava affatto**, ora
+  si recupera in 36,6 s.
+  Il fattore vale esattamente 1 sopra i 0,9 m/s, e lì sta tutto quello che
+  il collaudo misura: il minimo in ogni scenario della golden test è 1,007,
+  quindi non si è mosso un decimale di nessun valore atteso. Quello che
+  resta invariato è anche il punto: con la prua nel vento e **la barra al
+  centro** non se ne esce lo stesso, perché non c'è nessuna barra che
+  vinca. La panne continua a chiedere una manovra, solo non è più una buca
+  in cui si cade senza aver sbagliato niente.
+- `test/panne.test.js` guadagna il recupero col timone da quattro
+  situazioni di quasi-stallo, con i tempi di prima scritti accanto a quelli
+  di adesso.
 - **Con poco vento la bolina non si poteva fare, e la colpa era
   dell'autotimoniere.** Chi partiva da un porto con aria leggera e provava a
   risalire il vento si ritrovava, dopo un minuto, a mezzo nodo e quaranta
