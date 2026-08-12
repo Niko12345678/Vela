@@ -10,6 +10,134 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
 ## Non rilasciato
 
 ### Aggiunto
+- **Il giorno e la notte si vedono.** La luce segue l'ora di bordo:
+  all'alba il mare si scalda d'arancio, a mezzogiorno la luce è piena, al
+  tramonto vira al rosso e poi al viola del crepuscolo, di notte resta un
+  blu profondo. Segue l'**orologio** e non la casella del meteo, perché il
+  giorno e la notte ci sono comunque, anche col vento fermo — ed è la metà
+  del ciclo che si chiedeva.
+  Due scelte che non sono grafica. La velatura si stende **sopra il mare e
+  sotto gli strumenti**: vela le terre, i tratteggi del vento e la barca,
+  perché è l'aria che ci sta in mezzo, ma lascia gli strumenti a piena
+  luce, che è come stanno in barca di notte e l'unico modo perché restino
+  leggibili. E il nero pieno non arriva mai: al culmine della notte resta
+  una velatura al 38 %, perché una schermata nera non è un gioco.
+- **La previsione delle prossime dodici ore**, in fondo alla carta
+  nautica: una freccia per ogni ora che verrà, con direzione e forza, e le
+  ore ventose in evidenza. **Non è una stima** — è la stessa formula del
+  vento valutata più avanti nel tempo, quindi quello che mostra è
+  esattamente quello che si troverà. Un collaudo lo verifica nel modo più
+  diretto che ci sia: legge la previsione, poi lascia scorrere il tempo
+  fino a quell'ora e controlla che il vento sia identico, non «vicino».
+  È il regalo nascosto dell'aver preteso che il meteo fosse una funzione
+  pura del cronometro invece di qualcosa che si integra: la previsione non
+  è costata una riga di motore, solo il disegno. Serve dove si decide
+  davvero — sulla carta, guardando se conviene partire adesso o aspettare:
+  all'alba si vede già arrivare il rinforzo del pomeriggio, e una tratta di
+  bolina conviene farla prima che il vento giri.
+- `test/meteo.test.js` guadagna tre prove: la previsione confrontata con
+  quello che poi succede, ora per ora; la giornata che si vede arrivare
+  dalla previsione dell'alba; e il cielo che segue l'ora senza scatti fra
+  una mezz'ora e l'altra e senza mai spegnere del tutto la luce.
+
+### Aggiunto
+- **Il vento vive con le ore — «Meteo vivo» nel menù.** Si alza col sole,
+  culmina nel primo pomeriggio, cala la sera e resta leggero di notte, e
+  intanto ruota: la brezza col sole nell'arco della giornata, il regime più
+  lentamente di giorno in giorno. Con 7 m/s impostati si va dagli 8,6 nodi
+  dell'alba ai 20 del pomeriggio, con una media di giornata a 12,9 — il
+  95 % del cursore, che quindi continua a dire più o meno quello che
+  promette, ma da adesso come **riferimento della giornata** e non come il
+  vento di quel momento. È il motivo per cui conviene guardare l'ora prima
+  di partire: la stessa traversata alle sei del mattino e alle tre del
+  pomeriggio non è la stessa traversata.
+  **Nasce spento**, e il valore predefinito è scritto nel codice invece che
+  letto dalla casella apposta: il DOM finto del collaudo risponde
+  `checked = true` a qualunque elemento, e un default preso di lì tornerebbe
+  acceso in tutti i test. Spento, la catena è l'identità — verificato
+  confrontando direzione e velocità con la formula di sempre scritta a mano
+  nel collaudo, cifra per cifra — e infatti **la golden test non ha dovuto
+  cambiare una riga**.
+  Non è un tiro di dadi: niente `Math.random`, tutto è funzione del
+  cronometro e del seme, quindi la stessa parola rifà la stessa giornata e
+  un collaudo può verificarla. Il costo per campione è zero, perché si
+  calcola dentro la cache del vento di fondo, una volta per fotogramma:
+  misurato, 200 000 campioni costano quanto prima.
+- `test/meteo.test.js`: spento identico alla formula di sempre cifra per
+  cifra, la brezza col verso e il culmine giusti, la media della giornata
+  vicina al cursore, la direzione che gira quanto basta a farsi notare ma
+  non tanto da rendere irriconoscibile la carta, stessa parola stessa
+  giornata, il costo per campione, il giro salva-e-riprendi, e — il più
+  utile di tutti — **il ritmo di gioco che non cambia il risultato col
+  meteo acceso**, che è il modo di accorgersi se un giorno il meteo
+  smettesse di essere una funzione del tempo per diventare qualcosa che si
+  integra passo per passo.
+
+### Corretto
+- **Le fasi del regime entrano nella sessione invece di essere ridedotte
+  dal seme.** Sono due numeri, e ricavarli dal seme era un filo teso fra
+  due cose che possono divergere: la carta è costruita con una parola, il
+  campo di testo ne mostra un'altra, e la giornata ripresa non era più
+  quella di prima. L'ha trovato il collaudo del ricaricamento, non il
+  ragionamento.
+
+### Aggiunto
+- **L'ora di bordo.** Nel riquadro di velocità e vento compare che ora è e
+  in che fase sta il cielo — alba, giorno, tramonto, notte — e dal secondo
+  giorno anche quale. Non è un orologio a parte e non introduce una seconda
+  scala del tempo, che sarebbe il modo migliore di farle litigare: è la
+  stessa di `nm` e di `realT`, cioè quella che il gioco ha già. La carta è
+  ridotta 1:6, quindi **un secondo di cronometro vale sei secondi di
+  orologio**, ed è lo stesso conto per cui il giornale di bordo dice «5 h»
+  di una traversata durata cinquanta minuti al cronometro. Se avessi scelto
+  una durata del giorno a occhio, una traversata di trenta miglia avrebbe
+  attraversato tre albe mentre il giornale ne dichiarava cinque ore.
+  Ne viene un giorno da quattro ore di gioco a ritmo 1×, due a 2×, un
+  quarto d'ora a 16×: una traversata copre qualche ora della giornata, e si
+  può partire col fresco del mattino e arrivare che il sole cala. Si salpa
+  alle 08:00.
+  È una **funzione pura del cronometro**: niente da integrare, niente che
+  possa scivolare, e a parità di cronometro sempre la stessa ora comunque
+  ci si sia arrivati. Serve così perché è la base su cui poggeranno la
+  brezza che gira con le ore e le correnti di marea, che devono restare
+  ripetibili.
+- `test/orologio.test.js`: la scala verificata sui suoi numeri (14 400 s di
+  cronometro per giorno, dieci minuti per ogni ora di bordo), l'ora che non
+  dipende da come ci si è arrivati, il ritmo di gioco che accelera
+  l'orologio senza sfasarlo, il giro completo salva-e-riprendi, e una
+  sessione ostile che non deve mandare l'orologio fuori giri.
+
+### Corretto
+- **La sessione salva anche il vento.** Non l'aveva mai fatto: finché la
+  direzione era una costante scritta nel file non si notava, ma ricaricare
+  la pagina significava comunque ritrovarsi la bolina da rifare. Ora forza
+  e direzione stanno nella fotografia della partita insieme al cronometro,
+  e come tutto quello che si rilegge da fuori passano da un filtro in
+  entrata — il vento dentro la scala del cursore, l'ora di partenza dentro
+  le ventiquattr'ore, il cronometro mai negativo — perché quel testo lo può
+  aver scritto chiunque.
+
+### Cambiato
+- **Il vento di fondo si calcola una volta per fotogramma, non a ogni
+  campione.** Le due sinusoidi lente sulla direzione e quella sulla
+  velocità non dipendono da dove sei: dipendono solo dal tempo. Stavano
+  però dentro `windAt`, che fra fisica e tratteggi viene chiamata
+  centinaia di migliaia di volte per fotogramma, e quindi ricalcolavano
+  tre seni identici a ogni campione per ottenere sempre lo stesso numero.
+  Ora si tengono da parte finché il tempo o le manopole del vento non si
+  muovono: tre confronti al posto di tre `Math.sin`. Con le raffiche
+  accese il campo di vento passa da 160 a 136 ms per 200 000 campioni.
+  I valori non cambiano di un bit — verificato campionando direzione e
+  velocità a quattro tempi e tre posizioni, e confrontando le cifre a una
+  a una.
+  La cache sta accanto a `windAt` e non dentro `updateWind` apposta:
+  `windAt` la chiama anche chi il ciclo non lo fa girare — il consiglio di
+  rotta, il collaudo — e deve dare la risposta giusta lo stesso, senza che
+  nessuno debba ricordarsi di aggiornare prima qualcos'altro. È anche il
+  posto dove andrà il vento che cambia con le ore, che è il motivo per cui
+  quel gradino si fa adesso.
+
+### Aggiunto
 - **`O`: la manovra assistita, e l'indicatore che dice se si passa.**
   Virare era la cosa più difficile da azzeccare, e il motivo è che non
   c'era modo di *sapere* se sarebbe riuscita: si provava, e se l'abbrivio

@@ -227,6 +227,42 @@ const MINI_LATO=168, MINI_ZMAX=12;
 let windBase=7, windDirBase=200*D2R, gusts=[], streaks=[];
 let assist=0.55;   // 0.55 = mare facile, 1 = pieno
 let streakVis=1;   // visibilità dei tratteggi del vento
+
+/* ── il vento che gira con le ore ──
+   Spento di serie, si accende dalla casella «Meteo vivo» del menù. Il
+   valore predefinito è scritto **qui** e non letto dalla casella apposta:
+   il DOM finto del collaudo risponde `checked = true` a qualunque
+   elemento, e un default preso di lì tornerebbe acceso in tutti i test.
+   Spento, tutta la catena qui sotto è l'identità e il vento è quello di
+   sempre, bit per bit.
+
+   Tre strati, tutti funzione del cronometro e del seme — nessun
+   `Math.random`, quindi la stessa parola rifà la stessa giornata e un
+   collaudo può verificarla:
+
+   1. il **regime**, che gira lentamente in giorni, e viene dal seme;
+   2. la **brezza termica**, che si alza col sole, culmina nel primo
+      pomeriggio e ruota con lui: è l'effetto che si sente davvero
+      navigando sottocosta d'estate;
+   3. la **calma della notte**, che è la stessa brezza al minimo.
+
+   Il cursore «Vento» smette quindi di essere *il* vento e diventa il vento
+   di riferimento della giornata: il pomeriggio si va sopra, la notte
+   sotto. */
+let meteoDin=false;
+let meteoFasi=[0,0];
+const METEO_MIN=0.68;          // quanto resta del vento di riferimento nel cuore della notte
+const METEO_MAX=1.40;          // e quanto ne fa la brezza al culmine del pomeriggio
+const METEO_ROT=20*D2R;        // di quanto gira la brezza fra la notte e il pomeriggio
+const METEO_REGIME=15*D2R;     // e di quanto la fa girare il regime, in giorni
+function meteoSemina(seedStr){
+  const rng=mulberry32(hashStr(String(seedStr)+"|meteo"));
+  meteoFasi=[rng()*TAU,rng()*TAU];
+}
+/* La brezza del momento: 0 nel cuore della notte, 1 al culmine. Sale col
+   sole a partire dalle otto e si spegne verso le dieci di sera — non è
+   astronomia, è la forma che ha una giornata di vento in Mediterraneo. */
+const meteoBrezza=h=>Math.max(0,Math.sin(Math.PI*(h-8)/14));
 /* Scala del tempo: tutto accelera insieme, le proporzioni restano. La
    scaletta è la stessa della tendina «Ritmo» del menù e dei tasti + e −,
    così i due comandi non si contraddicono; `0` riporta al tempo reale.
@@ -277,6 +313,7 @@ function semeNuovo(){
 }
 function newWorld(seedStr){
   world=mapMode==="ionio"?ionianWorld():genWorld(seedStr);
+  meteoSemina(seedStr);                 // stessa parola, stessa giornata di vento
   MARK_R=clamp(world.size/130,45,150);
   pianoAzzera(true);                    // altra carta, altri punti: la rotta vecchia non vuol dire niente
   fillPorts();
@@ -295,9 +332,47 @@ function say(t){game.msg=t;game.msgT=3.2;}
 
 /* campo di vento locale: base oscillante + raffiche */
 let shadeDir={x:0,y:1};     // direzione in cui soffia, aggiornata una volta per fotogramma
+
+/* ─ il vento di fondo ─
+   Due sinusoidi lente sulla direzione (±6° e ±4°, periodi di un minuto e
+   mezzo e di cinque) e una sulla velocità (±7%). Non dipendono da dove sei:
+   dipendono **solo** dal tempo. Stavano dentro `windAt`, che è chiamata
+   centinaia di migliaia di volte per fotogramma fra fisica e tratteggi, e
+   quindi ricalcolavano tre seni identici a ogni campione — mezzo milione di
+   volte per fotogramma per ottenere sempre lo stesso numero.
+   Qui si calcolano una volta sola e si tengono, finché il tempo o le
+   manopole del vento non si muovono. La condizione è tre confronti al posto
+   di tre `Math.sin`, ed è tenuta qui invece che in `updateWind` apposta:
+   `windAt` va chiamata anche da chi il ciclo non lo fa girare — il
+   consiglio di rotta, il collaudo — e deve dare la risposta giusta lo
+   stesso, senza che nessuno si ricordi di aggiornare prima qualcosa. */
+/* Il vento di fondo a un istante qualunque del cronometro — **non**
+   necessariamente adesso. Che sia una funzione pura del tempo non è un
+   vezzo: è quello che rende possibile la previsione, che non è una stima
+   ma la stessa formula valutata più avanti, ed è esatta. */
+function ventoAl(t){
+  let from=windDirBase+Math.sin(t*0.07)*6*D2R+Math.sin(t*0.021+1.7)*4*D2R;
+  let spd=windBase*(1+0.07*Math.sin(t*0.12+0.6));
+  if(meteoDin){
+    const h=oraHDi(t), br=meteoBrezza(h);
+    spd*=METEO_MIN+(METEO_MAX-METEO_MIN)*br;
+    // la brezza ruota col sole; il regime la porta a spasso in giorni
+    from+=METEO_ROT*Math.sin((h-14)/24*TAU)
+         +METEO_REGIME*Math.sin(t/(GIORNO*3)*TAU+meteoFasi[0])
+         +METEO_REGIME*0.55*Math.sin(t/(GIORNO*7)*TAU+meteoFasi[1]);
+  }
+  return {from:norm(from),spd};
+}
+let ventoT=NaN, ventoB=NaN, ventoD=NaN, ventoM=null, ventoFrom=0, ventoSpd=0;
+function ventoBase(){
+  if(game.t===ventoT&&windBase===ventoB&&windDirBase===ventoD&&meteoDin===ventoM) return;
+  ventoT=game.t; ventoB=windBase; ventoD=windDirBase; ventoM=meteoDin;
+  const v=ventoAl(game.t);                 // una volta per fotogramma, non per campione
+  ventoFrom=v.from; ventoSpd=v.spd;
+}
 function windAt(x,y){
-  let from=windDirBase+Math.sin(game.t*0.07)*6*D2R+Math.sin(game.t*0.021+1.7)*4*D2R;
-  let spd=windBase*(1+0.07*Math.sin(game.t*0.12+0.6));
+  ventoBase();
+  let from=ventoFrom, spd=ventoSpd;
   for(const g of gusts){
     const d=Math.hypot(x-g.x,y-g.y);
     if(d<g.r){const k=Math.cos(d/g.r*Math.PI/2); spd*=1+g.s*k; from+=g.sh*k;}
@@ -1524,8 +1599,49 @@ function draw(){
   drawBoat();
   ctx.restore();
 
+  /* La luce del giorno, stesa sopra il mare e sotto gli strumenti. Sta
+     qui e non dentro `drawWater` perché deve velare anche le terre, i
+     tratteggi del vento e la barca — è l'aria fra te e loro — ma **non**
+     gli strumenti, che di notte in barca sono l'unica cosa illuminata e
+     devono restare leggibili come di giorno.
+     Il nero pieno non arriva mai: al culmine della notte resta una
+     velatura, perché una schermata nera non è un gioco. */
+  const cielo=tintaDelCielo();
+  if(cielo){ ctx.fillStyle=cielo; ctx.fillRect(0,0,VW,VH); }
+
   drawHUD();
   tutHighlight();
+}
+
+/* ── il colore dell'aria, ora per ora ──
+   Una tabellina di istanti con il loro colore e la loro densità, e in
+   mezzo si interpola. Le ore non sono astronomia: sono la forma che ha
+   una giornata di luce in Mediterraneo a mezza stagione, scelta perché
+   alba e tramonto durino abbastanza da vedersi passare senza che la notte
+   si mangi metà della partita.
+   Segue l'orologio e non la casella del meteo: il giorno e la notte ci
+   sono comunque, anche col vento fermo. */
+const CIELO=[
+  [ 0.0,  10, 26, 51, 0.38],   // notte fonda
+  [ 4.5,  10, 26, 51, 0.38],
+  [ 6.0, 217,112, 54, 0.24],   // l'arancio dell'alba
+  [ 8.0, 255,214,150, 0.00],   // giorno pieno: nessuna velatura
+  [17.0, 255,214,150, 0.00],
+  [19.0, 226,102, 45, 0.20],   // il rosso del tramonto
+  [20.5, 120, 62,110, 0.28],   // il viola del crepuscolo
+  [22.0,  10, 26, 51, 0.38],
+  [24.0,  10, 26, 51, 0.38]
+];
+function tintaDelCielo(){
+  const h=oraH();
+  let i=0;
+  while(i<CIELO.length-2&&CIELO[i+1][0]<=h) i++;
+  const a=CIELO[i], b=CIELO[i+1];
+  const u=b[0]===a[0]?0:clamp((h-a[0])/(b[0]-a[0]),0,1);
+  const al=lerp(a[4],b[4],u);
+  if(al<0.004) return null;                    // di giorno non si disegna niente
+  return "rgba("+Math.round(lerp(a[1],b[1],u))+","+Math.round(lerp(a[2],b[2],u))+","
+        +Math.round(lerp(a[3],b[3],u))+","+al.toFixed(3)+")";
 }
 
 function drawWater(v,z){
@@ -1860,7 +1976,7 @@ function drawHUD(){
   const hdg=(norm(boat.h)*R2D+360)%360;
 
   /* ── strumenti, in alto a sinistra */
-  const px=14,py=14,pw=196,ph=126;
+  const px=14,py=14,pw=196,ph=148;
   if(hud.strumenti){
   panel(px,py,pw,ph);
   label("VELOCITÀ",px+12,py+20);
@@ -1879,6 +1995,17 @@ function drawHUD(){
   ctx.fillStyle=Math.abs(twa*R2D)<32?C("--warn"):C("--good");
   ctx.font="12px ui-monospace,monospace";ctx.textAlign="right";
   ctx.fillText(pointOfSail(twa),px+pw-12,py+112);
+  /* L'ora di bordo. Sta qui e non altrove perché è un dato di navigazione
+     come la rotta: quanta luce resta decide se si entra in quella cala o
+     si passa al largo. Il giorno si mostra solo dal secondo in poi, che è
+     quando comincia a voler dire qualcosa. */
+  ctx.fillStyle="rgba(243,234,212,.15)";ctx.fillRect(px+12,py+124,pw-24,1);
+  label("ORA DI BORDO",px+12,py+140);
+  const gg=giornoDiBordo(), fase=faseDelCielo();
+  ctx.fillStyle=fase==="notte"?C("--chart-dim"):C("--chart");
+  ctx.font="12px ui-monospace,monospace";ctx.textAlign="right";
+  ctx.fillText(oraHM()+(gg?"  g"+(gg+1):"")+"  "+fase,px+pw-12,py+140);
+  ctx.textAlign="left";
   }
 
   /* ── rosa dei venti, in alto a destra */
@@ -2486,6 +2613,11 @@ document.getElementById("easy").onchange=e=>{
 document.getElementById("wind").oninput=e=>{
   windBase=parseFloat(e.target.value);
   document.getElementById("windv").textContent=windBase.toFixed(1)+" m/s";
+};
+document.getElementById("meteo").onchange=e=>{
+  meteoDin=e.target.checked;
+  say(meteoDin?"Meteo vivo — il vento gira e rinforza con le ore, il cursore è la media della giornata"
+             :"Meteo fermo — il vento resta quello del cursore");
 };
 
 /* ══════════════════ rotta pianificata ══════════════════ */
@@ -3784,7 +3916,51 @@ function drawChart(){
                : "BORDI ACCESI · V LI SPEGNE · IL PIANO SEGUE IL PUNTO DI ROTTA ATTIVO, O IL CURSORE")
     : (stretto ? "BORDI: COME ARRIVARCI COL VENTO CHE C'È"
                : "V ACCENDE I BORDI: COME ARRIVARE AL PUNTO COL VENTO CHE C'È, E IN QUANTO"),24,74);
+  disegnaPrevisione(stretto);
   ctx.textBaseline="alphabetic";
+}
+
+/* ── la previsione ──
+   Dodici ore di vento, una freccia per ora, in fondo alla carta. Non è una
+   stima e non è un modello ridotto: è **la stessa formula** valutata più
+   avanti nel tempo, quindi quello che mostra è esattamente quello che
+   succederà. È il regalo nascosto dell'aver preteso che il meteo fosse una
+   funzione pura del cronometro invece di qualcosa che si integra: la
+   previsione non è costata una riga di motore.
+   Si disegna solo col meteo vivo acceso, perché a vento fermo prevedere
+   una costante non serve a nessuno. E si disegna qui, sulla carta, che è
+   dove si decide se partire adesso o aspettare: col vento a mezzogiorno la
+   traversata sotto la costa è una cosa, con quello delle sette un'altra. */
+function disegnaPrevisione(stretto){
+  if(!meteoDin) return;
+  const n=stretto?8:12, passo=48, alt=42;
+  const larg=n*passo;
+  const x0=VW-24-larg, y0=VH-24-alt;
+  if(x0<24) return;                         // su uno schermo così non ci sta: meglio niente
+  ctx.fillStyle="rgba(255,255,255,.80)";ctx.fillRect(x0-10,y0-16,larg+20,alt+24);
+  ctx.strokeStyle=CHART.dim;ctx.lineWidth=1;ctx.strokeRect(x0-9.5,y0-15.5,larg+19,alt+23);
+  ctx.fillStyle=CHART.dim;ctx.font="9px ui-monospace,monospace";
+  ctx.textAlign="left";ctx.textBaseline="alphabetic";
+  ctx.fillText("PREVISIONE — VENTO DELLE PROSSIME "+n+" ORE",x0-4,y0-4);
+  for(let i=0;i<n;i++){
+    const t=game.t+i*ORA_GIOCO, v=ventoAl(t), cx=x0+i*passo+passo/2, cy=y0+18;
+    // la freccia punta dove soffia, come sulla carta; la lunghezza dice la forza
+    const d=dv(v.from+Math.PI), L=6+Math.min(v.spd,18)*0.62;
+    ctx.strokeStyle=v.spd>windBase*1.15?"#8c2570":CHART.ink;
+    ctx.lineWidth=1.6;
+    ctx.beginPath();ctx.moveTo(cx-d.x*L/2,cy-d.y*L/2);ctx.lineTo(cx+d.x*L/2,cy+d.y*L/2);ctx.stroke();
+    const p=dv(v.from+Math.PI), q=dv(v.from+Math.PI+2.5), s=dv(v.from+Math.PI-2.5);
+    ctx.beginPath();
+    ctx.moveTo(cx+p.x*L/2,cy+p.y*L/2);
+    ctx.lineTo(cx+p.x*L/2+q.x*5,cy+p.y*L/2+q.y*5);
+    ctx.lineTo(cx+p.x*L/2+s.x*5,cy+p.y*L/2+s.y*5);
+    ctx.closePath();ctx.fillStyle=ctx.strokeStyle;ctx.fill();
+    ctx.fillStyle=CHART.dim;ctx.font="8px ui-monospace,monospace";ctx.textAlign="center";
+    ctx.fillText(String(Math.floor(oraHDi(t))).padStart(2,"0"),cx,y0+alt-8);
+    ctx.fillStyle=CHART.ink;ctx.font="9px ui-monospace,monospace";
+    ctx.fillText((v.spd*1.94384).toFixed(0),cx,y0+alt+1);
+  }
+  ctx.textAlign="left";
 }
 
 /* ══════════════════ giornale di bordo ══════════════════ */
@@ -3814,6 +3990,42 @@ const realT=t=>{                                     // tempo che ci vorrebbe al
   const h=Math.floor(t*SCALE_GEO/3600), mi=Math.round(t*SCALE_GEO%3600/60);
   return h?h+" h "+String(mi).padStart(2,"0"):mi+" min";
 };
+
+/* ── l'orologio di bordo ──
+   Che ora è, a bordo. Non è una scala del tempo nuova: è la stessa di
+   `realT` e di `nm`, cioè quella che il gioco ha già. Le miglia mostrate
+   sono vere e le distanze sono ridotte 1:6, quindi un secondo di
+   cronometro è **`SCALE_GEO` secondi di orologio**, ed è l'unica scelta
+   che non fa litigare il giornale di bordo col sole: se un passaggio dice
+   «5 h», il cielo deve aver fatto cinque ore.
+   Ne viene un giorno da 14 400 secondi di cronometro — quattro ore a
+   ritmo 1×, due a 2×, un quarto d'ora a 16×. Una traversata copre quindi
+   qualche ora della giornata, che è esattamente quello che si vuole:
+   partire col fresco del mattino e arrivare che il sole cala.
+   È una funzione pura di `game.t` e dell'ora di partenza — niente da
+   integrare, niente che possa scivolare, e a parità di seme la stessa
+   giornata. */
+const GIORNO=86400/SCALE_GEO;         // secondi di cronometro in un giorno di bordo
+let oraPartenza=8*3600;               // si salpa alle 08:00 (secondi veri da mezzanotte)
+const oraDiBordo=()=>((oraPartenza+game.t*SCALE_GEO)%86400+86400)%86400;
+const oraH=()=>oraDiBordo()/3600;     // 0…24, comoda per le formule del meteo
+const oraHDi=t=>((oraPartenza+t*SCALE_GEO)%86400+86400)%86400/3600;   // a un istante qualunque
+const ORA_GIOCO=3600/SCALE_GEO;       // secondi di cronometro in un'ora di bordo
+const giornoDiBordo=()=>Math.floor((oraPartenza+game.t*SCALE_GEO)/86400);
+const oraHM=()=>{                     // "14:32"
+  const s=oraDiBordo();
+  return String(Math.floor(s/3600)).padStart(2,"0")+":"+String(Math.floor(s%3600/60)).padStart(2,"0");
+};
+/* Le quattro fasi del cielo, con i loro confini. Le ore del crepuscolo
+   sono quelle del Mediterraneo a mezza stagione, non un'astronomia vera:
+   servono a dare un nome a quello che si vede, e a dire a chi guarda lo
+   strumento se conviene partire adesso o aspettare la luce. */
+function faseDelCielo(h=oraH()){
+  if(h<5||h>=21) return "notte";
+  if(h<7)  return "alba";
+  if(h<19) return "giorno";
+  return "tramonto";
+}
 let LOG={passages:[],polar:{},best:{}};
 let voy=null, challenge=null;
 
@@ -4311,6 +4523,16 @@ function sessioneCorrente(){
     v:SESSIONE_V, quando:Date.now(),
     carta:{modo:mapMode, seme:se?se.value:""},
     barca:barcaId, ritmo:timeScale, dest:destPorto, sfida:challenge,
+    /* Il tempo e il vento. Il vento non era mai stato salvato: finché la
+       direzione era una costante scritta nel file non si notava, ma è
+       comunque la differenza fra ritrovare la bolina dov'era e ritrovarsela
+       da rifare. `t` è il cronometro, da cui discende l'ora di bordo. */
+    tempo:{t:game.t, ora0:oraPartenza},
+    /* Le fasi del regime si salvano invece di ridedurle dal seme. Sono due
+       numeri, e la deduzione era un filo teso fra due cose che possono
+       divergere: la carta è costruita con un seme, il campo di testo ne
+       mostra un altro, e la giornata ripresa non era più quella. */
+    vento:{dir:windDirBase, base:windBase, meteo:meteoDin, fasi:meteoFasi.slice()},
     scafo:{x:boat.x,y:boat.y,h:boat.h,vx:boat.vx,vy:boat.vy,
            trim:boat.trim,jib:boat.jib,barra:boat.rudderTrim,
            reef:boat.reef,spi:boat.spi,fiocco:boat.jibFurled},
@@ -4354,6 +4576,29 @@ function riprendiSessione(s){
     setBarca(s.barca); if(boatEl)boatEl.value=barcaId;
   }
   if(RITMI.indexOf(num(s.ritmo,0))>=0) setRitmo(Number(s.ritmo),false);
+
+  /* Tempo e vento, filtrati come tutto il resto: quel testo lo può aver
+     scritto chiunque. Il cronometro non può essere negativo, l'ora di
+     partenza si riporta dentro le ventiquattr'ore, il vento dentro la
+     scala del cursore — un vento di trecento nodi non è una sessione, è
+     un dispetto. Vanno rimessi **prima** della posizione, perché
+     `newWorld` più sopra ha già ricostruito raffiche e tratteggi sul
+     vento vecchio, e da qui in poi tutto quello che si calcola deve
+     vedere quello giusto. */
+  const tm=s.tempo||{}, ve=s.vento||{};
+  game.t=Math.max(0,num(tm.t,game.t));
+  oraPartenza=((num(tm.ora0,8*3600)%86400)+86400)%86400;
+  windDirBase=norm(num(ve.dir,windDirBase));
+  windBase=clamp(num(ve.base,windBase),2,16);
+  meteoDin=!!ve.meteo;
+  const mEl=document.getElementById("meteo"); if(mEl)mEl.checked=meteoDin;
+  // le fasi del regime, se la fotografia le porta; altrimenti dal seme
+  if(Array.isArray(ve.fasi)&&ve.fasi.length===2&&ve.fasi.every(v=>Number.isFinite(Number(v))))
+    meteoFasi=ve.fasi.map(Number);
+  else meteoSemina(seme||semeCorrente());
+  const wEl=document.getElementById("wind"), wVal=document.getElementById("windv");
+  if(wEl)wEl.value=String(windBase);
+  if(wVal)wVal.textContent=windBase.toFixed(1)+" m/s";
 
   boat.x=x;boat.y=y;
   boat.vx=num(c.vx,0);boat.vy=num(c.vy,0);
