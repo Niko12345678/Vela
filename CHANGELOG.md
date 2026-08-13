@@ -9,6 +9,107 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
 
 ## Non rilasciato
 
+### Aggiunto
+- **La rotta consigliata tiene conto della marea, e non di quella di
+  adesso.** Finora il consiglio calcolava i tempi sulla sola polare, che
+  vive nel riferimento dell'acqua: con una marea contraria prometteva una
+  traversata che non si poteva fare in quel tempo. Ora la corrente entra
+  nel costo di ogni tratta — **a valle della polare e non dentro**, perché
+  quel conto e tutte le sue memorie devono restare esatti: un prodotto
+  scalare per campione, e solo la parte di corrente che va nella direzione
+  della tratta, perché quella di traverso ti sposta ma non ti fa arrivare
+  prima.
+  La parte che vale la pena raccontare è **quale** marea guarda. Il
+  Dijkstra ha già, in ogni nodo, l'etichetta di costo — che è un tempo di
+  arrivo — e gliela passa: così ogni tratta viene valutata con la corrente
+  che ci si troverà davvero, non con quella di partenza. Siccome la marea
+  gira ogni sei ore e una traversata del Ionio ne dura tre, è la differenza
+  fra un consiglio e un indovinello. Misurato su Preveza-Fiskardo: fra due
+  maree opposte il tempo consigliato cambia del 10 %, e la rotta guadagna
+  punti per stare fuori dalla corrente contraria.
+  A mare fermo il conto è **identico cifra per cifra** a quello di prima —
+  verificato riscrivendo a mano la formula della sola polare nel collaudo —
+  ed è la ragione per cui i dodici collaudi del consiglio non si sono
+  mossi.
+- **I bordi restano un conto sull'acqua**, di proposito: dicono da che
+  parte virare, che è una domanda a cui la corrente non cambia risposta.
+  Correggere anche la geometria delle mure vorrebbe dire risolvere i bordi
+  sul fondo, che è un'altra costruzione; il tempo per arrivare lo dà la
+  rotta consigliata, ed è lì che la marea conta.
+- `test/correnti.test.js` guadagna tre prove: la corrente che accorcia la
+  tratta a favore, la allunga contro e non la tocca di traverso; la stessa
+  tratta chiesta per fra sei ore che costa diversamente da adesso e torna
+  uguale dopo un ciclo intero; e il conto a mare fermo identico alla sola
+  polare.
+
+### Aggiunto
+- **La carta nautica dice anche la marea, non solo il vento.** Le frecce
+  sul mare raccontavano la corrente di *adesso*, ma chi pianifica una
+  traversata non chiede com'è: chiede **quando gira**. Tre aggiunte, tutte
+  dove uno le va a cercare.
+  Nella rosa in alto a destra, accanto alla freccia del vento ne compare
+  una seconda, più sottile e azzurra, che punta dove porta l'acqua — le due
+  convenzioni restano opposte, il vento da dove viene e la corrente dove
+  va, e affiancate dicono in un colpo se il bordo che stai pensando è
+  aiutato o contrastato. Sotto, in chiaro, direzione e nodi della marea e
+  **fra quanto gira**: un numero che si risolve invece di cercarlo, perché
+  il seno della marea si annulla ogni mezzo periodo.
+  E la striscia di previsione in fondo diventa a due righe: il vento sopra,
+  la marea sotto, ora per ora, con le colonne di **stanca** segnate. Da lì
+  si legge in un'occhiata la domanda vera — parto adesso o aspetto che la
+  corrente giri.
+  Come per il vento, non è una stima: la marea è una funzione pura del
+  cronometro, quindi la previsione è **esatta**. Un collaudo la verifica
+  nello stesso modo severo, leggendo la previsione e poi lasciando scorrere
+  il tempo fino a quell'ora; un altro controlla che la stanca annunciata
+  sia proprio l'istante in cui la corrente si ferma.
+
+### Aggiunto
+- **Le correnti di marea.** Col mare vivo l'acqua smette di stare ferma:
+  una marea scorre avanti e indietro con un ciclo di dodici ore e
+  ventiquattro, come quella vera. Al largo vale mezzo nodo scarso, ma nei
+  canali fra le isole stringe fino a un nodo e mezzo e scorre per il lungo
+  del passaggio.
+  Il campo si costruisce una volta per carta, e il conto dello
+  stringimento è la **continuità** — la ragione fisica per cui una
+  corrente accelera in un canale: la stessa acqua deve passare da meno
+  spazio. Per ogni punto si misura la larghezza del passaggio in quattro
+  direzioni e si tiene la più stretta; in mare aperto sono tutte larghe,
+  sottocosta la traversa è larga da un lato solo, in un canale è corta da
+  tutti e due. Si fa su una griglia booleana di terra invece che sui
+  poligoni, e l'intera carta del Ionio costa **8 ms**.
+- **Solcometro e velocità sul fondo diventano due numeri.** È il modo in
+  cui la corrente si vede: sopra resta la velocità sull'acqua — quella a
+  cui rispondono le vele e a cui è tarato il polare, e che non cambia di un
+  decimo perché l'acqua si muove — e sotto compaiono i nodi fatti davvero e
+  la rotta vera. Quando la corrente è di traverso i due divergono, ed è il
+  momento in cui te ne devi accorgere. Sulla carta, una griglia di frecce
+  che dice **dove porta l'acqua**: convenzione opposta a quella del vento,
+  che si segna da dove viene.
+
+### Cambiato
+- **La corrente entra in una riga sola, e non è una scorciatoia.**
+  `boat.vx/vy` è la velocità **rispetto all'acqua**, ed è la grandezza
+  giusta ovunque venga usata: il vento apparente si calcola su di lei, le
+  resistenze dello scafo pure perché è l'acqua che frena, e la presa del
+  timone anche perché è l'acqua che scorre sulla pala. Metterci dentro la
+  corrente vorrebbe dire contarla due volte, e la barca sentirebbe un vento
+  che non c'è. Quello che la corrente sposta è **dove finisci**, quindi
+  cambia solo l'integrazione della posizione.
+  È la ragione per cui `polarSolve` non si tocca e continua a valere: quel
+  conto vive nel riferimento dell'acqua e resta esatto. Un collaudo
+  verifica la separazione nel modo più severo — con corrente di traverso e
+  con corrente in poppa, a parità di velocità sull'acqua, il vento
+  apparente, l'angolo d'attacco, lo sbandamento e perfino l'accelerazione
+  devono venire **identici**, non simili.
+- La casella del menù diventa «Mare vivo (vento e correnti)»: era «Meteo
+  vivo» quando muoveva solo l'aria.
+- `test/correnti.test.js`: la corrente nulla a mare fermo, quella che porta
+  la barca senza farla andare più forte sull'acqua, la separazione dal
+  vento apparente, la marea che si inverte e torna, i canali che stringono
+  mentre a terra non scorre niente e il campo che si costruisce in fretta,
+  e la scia che esce dalla prua molto più dello scarroccio.
+
 ### Corretto
 - **Il pomeriggio non arriva più a raddoppiare il vento impostato.** Da un
   reclamo preciso: «sono partito con una virata che ero a 4 nodi e sono
