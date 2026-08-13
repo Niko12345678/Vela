@@ -78,18 +78,23 @@ test("la corrente sposta la barca sul fondo senza farla andare più forte sull'a
     const senza = naviga(0,0), con = naviga(1,0);
     correnteFinta(1,0); game.t = t0;
     const c = correnteAt(0,0);
-    report({ cx:c.x, cy:c.y, senza, con,
+    report({ cx:c.x, cy:c.y, senza, con, max: CORR_MAX,
              dx: con.x-senza.x, dy: con.y-senza.y });
   `);
-  // la tolleranza è quella del seno valutato all'ora giusta, non una resa
-  assert.ok(Math.abs(r.cx - 0.35) < 1e-3,
-    `al culmine della marea la corrente al largo vale CORR_MAX (ottenuto ${r.cx})`);
+  /* I valori si leggono dalla costante e non si scrivono a mano: la forza
+     della marea è una scelta di gioco che può cambiare — ed è già cambiata
+     una volta, quando si è scoperto che il Mediterraneo non è la Manica —
+     mentre quello che questi test difendono è il *comportamento*.
+     La tolleranza è quella del seno valutato all'ora giusta, non una resa. */
+  assert.ok(Math.abs(r.cx - r.max) < r.max*1e-2,
+    `al culmine della marea la corrente al largo vale CORR_MAX (${r.max}, ottenuto ${r.cx})`);
   assert.ok(Math.abs(r.cy) < 1e-9, "e va dove la mandiamo, senza componenti fantasma");
-  // in sessanta secondi a ~0,35 m/s sono una ventina di metri; la marea
+  // in sessanta secondi la deriva è circa CORR_MAX per il tempo; la marea
   // intanto gira un po', quindi si controlla l'ordine di grandezza
-  assert.ok(r.dx > 15 && r.dx < 25,
-    `la corrente deve portare la barca a valle di una ventina di metri (ottenuto ${r.dx.toFixed(1)})`);
-  assert.ok(Math.abs(r.dy) < 0.5,
+  const atteso = r.max*60;
+  assert.ok(r.dx > atteso*0.75 && r.dx < atteso*1.2,
+    `la corrente deve portare la barca a valle di circa ${atteso.toFixed(0)} m (ottenuto ${r.dx.toFixed(1)})`);
+  assert.ok(Math.abs(r.dy) < atteso*0.05,
     `e solo a valle, non di traverso (ottenuto ${r.dy.toFixed(2)})`);
   assert.ok(Math.abs(r.con.stw - r.senza.stw) < 1e-9,
     `ma la velocità sull'acqua deve restare identica: la corrente porta, non spinge (${r.senza.stw} contro ${r.con.stw})`);
@@ -132,14 +137,14 @@ test("la marea gira, e a mezzo ciclo la corrente si è invertita", async () => {
     const a = t => { game.t = t/24*GIORNO; const c = correnteAt(0,0); return c.x; };
     const q = CORR_MAREA/4;
     report({ culmine:a(q), stanca:a(q*2), contraria:a(q*3), ciclo:a(q+CORR_MAREA),
-             periodo: CORR_MAREA });
+             periodo: CORR_MAREA, max: CORR_MAX });
   `);
-  assert.ok(r.culmine > 0.3, `al culmine la corrente scorre piena (${r.culmine.toFixed(3)})`);
-  assert.ok(Math.abs(r.stanca) < 0.02,
+  assert.ok(r.culmine > r.max*0.9, `al culmine la corrente scorre piena (${r.culmine.toFixed(3)})`);
+  assert.ok(Math.abs(r.stanca) < r.max*0.06,
     `a mezza marea si ferma: è la stanca (${r.stanca.toFixed(3)})`);
-  assert.ok(r.contraria < -0.3,
+  assert.ok(r.contraria < -r.max*0.9,
     `e poi si inverte, che è quello che fa una marea (${r.contraria.toFixed(3)})`);
-  assert.ok(Math.abs(r.ciclo - r.culmine) < 0.02,
+  assert.ok(Math.abs(r.ciclo - r.culmine) < r.max*0.06,
     "dopo un ciclo intero torna dov'era");
 });
 
@@ -249,7 +254,7 @@ test("la stanca annunciata dalla carta è quella che poi arriva", async () => {
   `);
   for (const p of r.prove) {
     assert.ok(p.fra > 0, `la stanca deve stare nel futuro (da ${p.h} h: ${p.fra})`);
-    assert.ok(p.alla < 0.005,
+    assert.ok(p.alla < 0.002,
       `all'ora annunciata la corrente deve essersi fermata (da ${p.h} h la carta dice fra ${p.fra.toFixed(0)} s, e lì vale ${p.alla.toFixed(4)} m/s)`);
     // e non deve annunciare una stanca più lontana di mezzo ciclo
     assert.ok(p.fra <= r.periodo/2*3600/6 + 1,

@@ -9,6 +9,28 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
 
 ## Non rilasciato
 
+### Corretto
+- **Le correnti erano da Canale della Manica, non da Ionio.** Segnalato
+  provando: col cursore a 7 m/s la barca faceva fatica a superare i due
+  metri al secondo di bolina e cambiare mure diventava rischioso. La
+  polare non c'entrava — verificata identica bit per bit a prima di tutto
+  il lavoro di questi giorni, 3,44 nodi a TWA 40° come la fissa la golden
+  test — e nemmeno il vento. C'entrava la marea, che era semplicemente
+  troppo forte: sette decimi di nodo al largo e un nodo e mezzo nei
+  canali. Con la bolina notturna a 3,1 nodi, un nodo e mezzo contro voleva
+  dire andare sul fondo a **1,6 nodi**, cioè non andare.
+  Sotto c'era un errore di realismo: il **Mediterraneo è quasi senza
+  maree**. Nello Ionio l'escursione è di dieci-trenta centimetri e le
+  correnti sono trascurabili ovunque tranne che nei passaggi stretti. Ora
+  al largo valgono due decimi di nodo — niente, com'è giusto — e nei
+  canali sei decimi, che su una barca che ne fa tre si sentono eccome ma
+  non la fermano. Lo stesso caso peggiore passa da 1,6 a **2,5 nodi sul
+  fondo**.
+  I collaudi delle correnti ora leggono `CORR_MAX` invece di numeri
+  scritti a mano: la forza della marea è una scelta di gioco che può
+  cambiare ancora, mentre quello che quei test difendono è il
+  comportamento.
+
 ### Aggiunto
 - **La rotta consigliata tiene conto della marea, e non di quella di
   adesso.** Finora il consiglio calcolava i tempi sulla sola polare, che

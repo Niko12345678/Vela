@@ -163,8 +163,18 @@ function buildShade(islands){
    marcia costa una lettura d'array per passo, e l'intero campo si
    costruisce in un battito. */
 const CORR_N=64;              // lato della griglia
-const CORR_MAX=0.35;          // m/s al culmine della marea, in mare aperto (0,7 nodi)
-const CORR_AMP=2.2;           // quanto può stringere in un canale
+/* Quanto forte scorre. I numeri sono piccoli apposta: il **Mediterraneo è
+   quasi senza maree** — nello Ionio l'escursione è di dieci-trenta
+   centimetri — e le correnti di marea sono trascurabili ovunque tranne
+   che nei passaggi stretti, dove l'acqua costretta accelera. Al largo
+   valgono due decimi di nodo, cioè niente; nei canali arrivano a sei
+   decimi, che su una barca che di bolina ne fa tre si sentono eccome ma
+   non la fermano.
+   La prima taratura dava sette decimi al largo e un nodo e mezzo nei
+   canali: era un mare del Nord, e con la bolina notturna a tre nodi
+   significava andare sul fondo a un nodo e sei — cioè non andare. */
+const CORR_MAX=0.10;          // m/s al culmine della marea, in mare aperto (0,2 nodi)
+const CORR_AMP=3.0;           // quanto può stringere in un canale (fino a 0,6 nodi)
 const CORR_LARGO=1600;        // oltre questa larghezza il passaggio è "aperto"
 const CORR_MAREA=12.42;       // ore fra un flusso e il successivo, come la vera semidiurna
 function buildCorrente(islands,size,seedStr){
