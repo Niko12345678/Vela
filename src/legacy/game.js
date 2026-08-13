@@ -212,12 +212,25 @@ function buildCorrente(islands,size,seedStr){
   }
   return {n,passo,x0,y0,u,v};
 }
-/* La fase della marea adesso: ±1, un ciclo ogni 12h24 di orologio. */
-const marea=()=>Math.sin(TAU*oraH()/CORR_MAREA);
-/* La corrente in un punto, in m/s. Scrive in un oggetto riusato: la chiama
-   la fisica a ogni sottopasso, e non deve lasciare spazzatura per strada. */
+/* La fase della marea: ±1, un ciclo ogni 12h24 di orologio. Come il vento,
+   è una funzione **pura del tempo** e non uno stato che si integra — ed è
+   per questo che la carta può dire con esattezza a che ora girerà, invece
+   di stimarlo. */
+const mareaA=t=>Math.sin(TAU*oraHDi(t)/CORR_MAREA);
+const marea=()=>mareaA(game.t);
+/* Quando la marea si ferma, cioè quando cambia verso: i secondi di
+   cronometro da qui alla prossima stanca. Si risolve, non si cerca — il
+   seno si annulla ogni mezzo periodo. */
+function prossimaStanca(){
+  const h=oraHDi(game.t), mezzo=CORR_MAREA/2;
+  const resta=mezzo-(h%mezzo+mezzo)%mezzo;
+  return resta*3600/SCALE_GEO;
+}
+/* La corrente in un punto, in m/s, a un istante qualunque del cronometro.
+   Scrive in un oggetto riusato: la chiama la fisica a ogni sottopasso, e
+   non deve lasciare spazzatura per strada. */
 const corr={x:0,y:0};
-function correnteAt(x,y){
+function correnteAlT(x,y,t){
   corr.x=0;corr.y=0;
   if(!meteoDin||!world||!world.corrente) return corr;
   const c=world.corrente, n=c.n;
@@ -228,10 +241,11 @@ function correnteAt(x,y){
   const a=j*n+i, b=a+1, d=a+n, e=d+1;
   const ux=(c.u[a]*(1-sx)+c.u[b]*sx)*(1-sy)+(c.u[d]*(1-sx)+c.u[e]*sx)*sy;
   const uy=(c.v[a]*(1-sx)+c.v[b]*sx)*(1-sy)+(c.v[d]*(1-sx)+c.v[e]*sx)*sy;
-  const m=CORR_MAX*marea();
+  const m=CORR_MAX*mareaA(t);
   corr.x=ux*m; corr.y=uy*m;
   return corr;
 }
+const correnteAt=(x,y)=>correnteAlT(x,y,game.t);
 
 function genWorld(seedStr){
   const rng=mulberry32(hashStr(seedStr));
@@ -4031,6 +4045,32 @@ function drawChart(){
   ctx.fillStyle=CHART.dim;ctx.font="9px ui-monospace,monospace";
   ctx.fillText("VENTO "+String(Math.round((w.from*R2D+360)%360)).padStart(3,"0")+"° "+
                (w.spd*1.94384).toFixed(0)+" kn",rx,ry+48);
+  /* La marea nella stessa rosa, perché è l'altra metà della stessa
+     domanda: da che parte mi porta il mare. La freccia è più sottile e
+     punta **dove va** l'acqua, non da dove viene — è la convenzione delle
+     correnti, opposta a quella del vento, e le due frecce insieme dicono
+     in un colpo se il bordo che stai pensando è aiutato o contrastato.
+     Sotto, il dato che serve davvero pianificando: fra quanto gira. */
+  if(meteoDin&&world.corrente){
+    const cu=correnteAt(boat.x,boat.y);
+    const m=Math.hypot(cu.x,cu.y);
+    if(m>0.02){
+      const cp={x:cu.x/m,y:cu.y/m}, cn={x:-cp.y,y:cp.x};
+      ctx.strokeStyle="#1c6e8c";ctx.lineWidth=1.6;
+      ctx.beginPath();ctx.moveTo(rx-cp.x*20,ry-cp.y*20);ctx.lineTo(rx+cp.x*24,ry+cp.y*24);ctx.stroke();
+      ctx.fillStyle="#1c6e8c";ctx.beginPath();
+      ctx.moveTo(rx+cp.x*24,ry+cp.y*24);
+      ctx.lineTo(rx+cp.x*14+cn.x*5,ry+cp.y*14+cn.y*5);
+      ctx.lineTo(rx+cp.x*14-cn.x*5,ry+cp.y*14-cn.y*5);ctx.closePath();ctx.fill();
+      ctx.fillStyle="#1c6e8c";
+      ctx.fillText("MAREA "+String(Math.round((angOf(cu.x,cu.y)*R2D+360)%360)).padStart(3,"0")+"° "+
+                   (m*1.94384).toFixed(1)+" kn",rx,ry+60);
+    }else{
+      ctx.fillStyle="#1c6e8c";ctx.fillText("MAREA — STANCA",rx,ry+60);
+    }
+    ctx.fillStyle=CHART.dim;
+    ctx.fillText("GIRA FRA "+realT(prossimaStanca()).toUpperCase(),rx,ry+71);
+  }
 
   // scala grafica, in miglia vere
   const targetPx=170;
@@ -4129,32 +4169,56 @@ function drawChart(){
    traversata sotto la costa è una cosa, con quello delle sette un'altra. */
 function disegnaPrevisione(stretto){
   if(!meteoDin) return;
-  const n=stretto?8:12, passo=48, alt=42;
+  const n=stretto?8:12, passo=48, alt=74;
   const larg=n*passo;
   const x0=VW-24-larg, y0=VH-24-alt;
   if(x0<24) return;                         // su uno schermo così non ci sta: meglio niente
-  ctx.fillStyle="rgba(255,255,255,.80)";ctx.fillRect(x0-10,y0-16,larg+20,alt+24);
+  ctx.fillStyle="rgba(255,255,255,.82)";ctx.fillRect(x0-10,y0-16,larg+20,alt+24);
   ctx.strokeStyle=CHART.dim;ctx.lineWidth=1;ctx.strokeRect(x0-9.5,y0-15.5,larg+19,alt+23);
   ctx.fillStyle=CHART.dim;ctx.font="9px ui-monospace,monospace";
   ctx.textAlign="left";ctx.textBaseline="alphabetic";
-  ctx.fillText("PREVISIONE — VENTO DELLE PROSSIME "+n+" ORE",x0-4,y0-4);
-  for(let i=0;i<n;i++){
-    const t=game.t+i*ORA_GIOCO, v=ventoAl(t), cx=x0+i*passo+passo/2, cy=y0+18;
-    // la freccia punta dove soffia, come sulla carta; la lunghezza dice la forza
-    const d=dv(v.from+Math.PI), L=6+Math.min(v.spd,18)*0.62;
-    ctx.strokeStyle=v.spd>windBase*1.15?"#8c2570":CHART.ink;
-    ctx.lineWidth=1.6;
-    ctx.beginPath();ctx.moveTo(cx-d.x*L/2,cy-d.y*L/2);ctx.lineTo(cx+d.x*L/2,cy+d.y*L/2);ctx.stroke();
-    const p=dv(v.from+Math.PI), q=dv(v.from+Math.PI+2.5), s=dv(v.from+Math.PI-2.5);
+  ctx.fillText("PREVISIONE — LE PROSSIME "+n+" ORE",x0-4,y0-4);
+  const freccia=(cx,cy,dir,L,col)=>{          // punta dove va, non da dove viene
+    const p=dv(dir), q=dv(dir+2.5), s=dv(dir-2.5);
+    ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=1.6;
+    ctx.beginPath();ctx.moveTo(cx-p.x*L/2,cy-p.y*L/2);ctx.lineTo(cx+p.x*L/2,cy+p.y*L/2);ctx.stroke();
     ctx.beginPath();
     ctx.moveTo(cx+p.x*L/2,cy+p.y*L/2);
     ctx.lineTo(cx+p.x*L/2+q.x*5,cy+p.y*L/2+q.y*5);
     ctx.lineTo(cx+p.x*L/2+s.x*5,cy+p.y*L/2+s.y*5);
-    ctx.closePath();ctx.fillStyle=ctx.strokeStyle;ctx.fill();
-    ctx.fillStyle=CHART.dim;ctx.font="8px ui-monospace,monospace";ctx.textAlign="center";
-    ctx.fillText(String(Math.floor(oraHDi(t))).padStart(2,"0"),cx,y0+alt-8);
+    ctx.closePath();ctx.fill();
+  };
+  ctx.fillStyle=CHART.dim;ctx.font="8px ui-monospace,monospace";
+  ctx.textAlign="right";
+  ctx.fillText("VENTO",x0-14,y0+22);
+  ctx.fillText("MAREA",x0-14,y0+56);
+  ctx.textAlign="center";
+  for(let i=0;i<n;i++){
+    const t=game.t+i*ORA_GIOCO, cx=x0+i*passo+passo/2;
+    // ── il vento
+    const v=ventoAl(t);
+    freccia(cx,y0+16,v.from+Math.PI,6+Math.min(v.spd,18)*0.62,
+            v.spd>windBase*1.15?"#8c2570":CHART.ink);
     ctx.fillStyle=CHART.ink;ctx.font="9px ui-monospace,monospace";
-    ctx.fillText((v.spd*1.94384).toFixed(0),cx,y0+alt+1);
+    ctx.fillText((v.spd*1.94384).toFixed(0),cx,y0+34);
+    // ── l'ora, in mezzo alle due righe
+    ctx.fillStyle=CHART.dim;ctx.font="8px ui-monospace,monospace";
+    ctx.fillText(String(Math.floor(oraHDi(t))).padStart(2,"0"),cx,y0+44);
+    /* ── la marea, letta dove sta la barca: è la sua corrente che conta,
+       e il verso che si inverte a metà ciclo è la cosa che si viene a
+       cercare qui — «parto adesso o aspetto che giri». */
+    const cu=correnteAlT(boat.x,boat.y,t), m=Math.hypot(cu.x,cu.y);
+    if(m>0.03){
+      freccia(cx,y0+58,angOf(cu.x,cu.y),8+Math.min(m,1.0)*22,"#1c6e8c");
+      ctx.fillStyle="#1c6e8c";ctx.font="9px ui-monospace,monospace";
+      ctx.fillText((m*1.94384).toFixed(1),cx,y0+74);
+    }else{
+      // la stanca: l'ora in cui non porta, e quella prima di girare
+      ctx.strokeStyle="#1c6e8c";ctx.lineWidth=1.4;
+      ctx.beginPath();ctx.moveTo(cx-7,y0+58);ctx.lineTo(cx+7,y0+58);ctx.stroke();
+      ctx.fillStyle="#1c6e8c";ctx.font="8px ui-monospace,monospace";
+      ctx.fillText("STANCA",cx,y0+74);
+    }
   }
   ctx.textAlign="left";
 }

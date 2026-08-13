@@ -10,6 +10,28 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
 ## Non rilasciato
 
 ### Aggiunto
+- **La carta nautica dice anche la marea, non solo il vento.** Le frecce
+  sul mare raccontavano la corrente di *adesso*, ma chi pianifica una
+  traversata non chiede com'è: chiede **quando gira**. Tre aggiunte, tutte
+  dove uno le va a cercare.
+  Nella rosa in alto a destra, accanto alla freccia del vento ne compare
+  una seconda, più sottile e azzurra, che punta dove porta l'acqua — le due
+  convenzioni restano opposte, il vento da dove viene e la corrente dove
+  va, e affiancate dicono in un colpo se il bordo che stai pensando è
+  aiutato o contrastato. Sotto, in chiaro, direzione e nodi della marea e
+  **fra quanto gira**: un numero che si risolve invece di cercarlo, perché
+  il seno della marea si annulla ogni mezzo periodo.
+  E la striscia di previsione in fondo diventa a due righe: il vento sopra,
+  la marea sotto, ora per ora, con le colonne di **stanca** segnate. Da lì
+  si legge in un'occhiata la domanda vera — parto adesso o aspetto che la
+  corrente giri.
+  Come per il vento, non è una stima: la marea è una funzione pura del
+  cronometro, quindi la previsione è **esatta**. Un collaudo la verifica
+  nello stesso modo severo, leggendo la previsione e poi lasciando scorrere
+  il tempo fino a quell'ora; un altro controlla che la stanca annunciata
+  sia proprio l'istante in cui la corrente si ferma.
+
+### Aggiunto
 - **Le correnti di marea.** Col mare vivo l'acqua smette di stare ferma:
   una marea scorre avanti e indietro con un ciclo di dodici ore e
   ventiquattro, come quella vera. Al largo vale mezzo nodo scarso, ma nei

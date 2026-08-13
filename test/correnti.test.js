@@ -202,3 +202,57 @@ test("con la corrente la scia esce dalla prua più dello scarroccio", async () =
   assert.ok(r.traverso.scarto > r.senza.scarto + 2,
     `ma la rotta vera sì, e di parecchio più dello scarroccio: ${r.senza.scarto.toFixed(1)}° -> ${r.traverso.scarto.toFixed(1)}°`);
 });
+
+test("la carta prevede la marea come prevede il vento: esatta, non stimata", async () => {
+  /* Stessa proprietà del vento, e per la stessa ragione: la marea è una
+     funzione pura del cronometro. Si legge la previsione, poi si lascia
+     scorrere il tempo fino a quell'ora e si controlla che la corrente sia
+     quella, identica. */
+  const r = await runInGame(MONDO + UNIFORME + `
+    meteoDin = true; oraPartenza = 4*3600; game.t = 0;
+    correnteFinta(1, 0);
+    boat.x = 0; boat.y = 0;
+    const detto = [], avvenuto = [];
+    for (let i = 0; i < 12; i++) {
+      const c = correnteAlT(boat.x, boat.y, game.t + i*ORA_GIOCO);
+      detto.push([c.x, c.y]);
+    }
+    for (let i = 0; i < 12; i++) {
+      game.t = i*ORA_GIOCO;
+      const c = correnteAt(boat.x, boat.y);
+      avvenuto.push([c.x, c.y]);
+    }
+    report({ detto, avvenuto });
+  `);
+  for (let i = 0; i < r.detto.length; i++) {
+    assert.equal(r.detto[i][0], r.avvenuto[i][0],
+      `la corrente prevista per fra ${i} ore deve essere quella che poi c'è`);
+    assert.equal(r.detto[i][1], r.avvenuto[i][1], "in tutte e due le componenti");
+  }
+});
+
+test("la stanca annunciata dalla carta è quella che poi arriva", async () => {
+  const r = await runInGame(MONDO + UNIFORME + `
+    meteoDin = true; oraPartenza = 0;
+    correnteFinta(1, 0);
+    boat.x = 0; boat.y = 0;
+    const prove = [];
+    for (const h of [0.5, 3, 6.4, 9, 11.9]) {
+      game.t = h/24*GIORNO;
+      const fra = prossimaStanca();
+      const primaSi = Math.abs(correnteAt(0,0).x);
+      game.t += fra;                          // ci si porta all'ora annunciata
+      const alla = Math.abs(correnteAt(0,0).x);
+      prove.push({ h, fra, primaSi, alla });
+    }
+    report({ prove, periodo: CORR_MAREA });
+  `);
+  for (const p of r.prove) {
+    assert.ok(p.fra > 0, `la stanca deve stare nel futuro (da ${p.h} h: ${p.fra})`);
+    assert.ok(p.alla < 0.005,
+      `all'ora annunciata la corrente deve essersi fermata (da ${p.h} h la carta dice fra ${p.fra.toFixed(0)} s, e lì vale ${p.alla.toFixed(4)} m/s)`);
+    // e non deve annunciare una stanca più lontana di mezzo ciclo
+    assert.ok(p.fra <= r.periodo/2*3600/6 + 1,
+      "e non più lontana di mezzo ciclo di marea");
+  }
+});
