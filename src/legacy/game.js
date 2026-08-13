@@ -137,6 +137,102 @@ function buildShade(islands){
   return shade;
 }
 
+/* ── le correnti di marea ──
+   Una corrente non è vento: non ti spinge, ti **porta**. La barca continua
+   a fare i suoi nodi sull'acqua e a sentire lo stesso vento apparente, ma
+   l'acqua sotto di lei si sposta, e sul fondo la scia esce diversa dalla
+   prua molto più di quanto faccia lo scarroccio. È per questo che gli
+   strumenti veri hanno due velocità, il solcometro e quella sul fondo, e
+   da qui in poi le ha anche questo.
+
+   Il campo si precalcola una volta per carta. Due cose per cella:
+   **dove scorre** e **quanto stringe**. La marea poi lo fa respirare
+   avanti e indietro con le ore, che è quello che fa una marea.
+
+   Il conto dello stringimento è la continuità, cioè la ragione fisica per
+   cui una corrente accelera in un canale: la stessa acqua che passa deve
+   passare da meno spazio. Per ogni punto misuro la **larghezza del
+   passaggio** in quattro direzioni — quanto mare libero c'è da una parte
+   più quanto ce n'è dall'altra — e prendo la più stretta: in mare aperto
+   sono tutte larghe, sottocosta la traversa è larga da un lato solo, ma in
+   un canale la traversa è corta da tutti e due. Lì la corrente stringe e
+   scorre **per il lungo**, non di traverso: la direzione è quella della
+   coppia più larga, cioè l'asse del canale.
+
+   Si fa su una griglia booleana di terra invece che sui poligoni: la
+   marcia costa una lettura d'array per passo, e l'intero campo si
+   costruisce in un battito. */
+const CORR_N=64;              // lato della griglia
+const CORR_MAX=0.35;          // m/s al culmine della marea, in mare aperto (0,7 nodi)
+const CORR_AMP=2.2;           // quanto può stringere in un canale
+const CORR_LARGO=1600;        // oltre questa larghezza il passaggio è "aperto"
+const CORR_MAREA=12.42;       // ore fra un flusso e il successivo, come la vera semidiurna
+function buildCorrente(islands,size,seedStr){
+  const n=CORR_N, lato=size*1.06, passo=lato/n, x0=-lato/2, y0=-lato/2;
+  const terra=new Uint8Array(n*n);
+  for(let j=0;j<n;j++)for(let i=0;i<n;i++)
+    terra[j*n+i]=landDepth(islands,x0+(i+0.5)*passo,y0+(j+0.5)*passo)>0?1:0;
+  // quante celle di mare libero da (i,j) andando in (di,dj), fino a un tetto
+  const MAXP=Math.ceil(CORR_LARGO/passo);
+  const libero=(i,j,di,dj)=>{
+    let k=0,x=i,y=j;
+    while(k<MAXP){
+      x+=di;y+=dj;
+      if(x<0||y<0||x>=n||y>=n) return MAXP;      // fuori carta: mare aperto
+      if(terra[y*n+x]) return k;
+      k++;
+    }
+    return MAXP;
+  };
+  const ASSI=[[1,0],[1,1],[0,1],[-1,1]];
+  const u=new Float32Array(n*n), v=new Float32Array(n*n);
+  // l'asse della marea al largo: una direzione per carta, dal seme
+  const rng=mulberry32(hashStr(String(seedStr)+"|marea"));
+  const aperto=rng()*TAU, ax=Math.cos(aperto), ay=Math.sin(aperto);
+  for(let j=0;j<n;j++)for(let i=0;i<n;i++){
+    const c=j*n+i;
+    if(terra[c]) continue;                       // a terra non scorre niente
+    let stretta=1e9, kStretta=0, larga=-1, kLarga=0;
+    for(let k=0;k<4;k++){
+      const [di,dj]=ASSI[k];
+      const w=(libero(i,j,di,dj)+libero(i,j,-di,-dj))*passo;
+      if(w<stretta){stretta=w;kStretta=k;}
+      if(w>larga){larga=w;kLarga=k;}
+    }
+    let dx,dy,amp;
+    if(stretta<CORR_LARGO*0.75){
+      // canale: scorre per il lungo, e stringe quanto il passaggio è stretto
+      const [di,dj]=ASSI[kLarga], L=Math.hypot(di,dj);
+      dx=di/L; dy=dj/L;
+      amp=clamp(CORR_LARGO/Math.max(stretta,passo),1,CORR_AMP);
+      // il verso segue l'asse della marea, per non avere canali che si contraddicono
+      if(dx*ax+dy*ay<0){dx=-dx;dy=-dy;}
+    }else{ dx=ax; dy=ay; amp=1; }
+    u[c]=dx*amp; v[c]=dy*amp;
+  }
+  return {n,passo,x0,y0,u,v};
+}
+/* La fase della marea adesso: ±1, un ciclo ogni 12h24 di orologio. */
+const marea=()=>Math.sin(TAU*oraH()/CORR_MAREA);
+/* La corrente in un punto, in m/s. Scrive in un oggetto riusato: la chiama
+   la fisica a ogni sottopasso, e non deve lasciare spazzatura per strada. */
+const corr={x:0,y:0};
+function correnteAt(x,y){
+  corr.x=0;corr.y=0;
+  if(!meteoDin||!world||!world.corrente) return corr;
+  const c=world.corrente, n=c.n;
+  const fx=(x-c.x0)/c.passo-0.5, fy=(y-c.y0)/c.passo-0.5;
+  const i=Math.floor(fx), j=Math.floor(fy);
+  if(i<0||j<0||i>=n-1||j>=n-1) return corr;
+  const sx=fx-i, sy=fy-j;
+  const a=j*n+i, b=a+1, d=a+n, e=d+1;
+  const ux=(c.u[a]*(1-sx)+c.u[b]*sx)*(1-sy)+(c.u[d]*(1-sx)+c.u[e]*sx)*sy;
+  const uy=(c.v[a]*(1-sx)+c.v[b]*sx)*(1-sy)+(c.v[d]*(1-sx)+c.v[e]*sx)*sy;
+  const m=CORR_MAX*marea();
+  corr.x=ux*m; corr.y=uy*m;
+  return corr;
+}
+
 function genWorld(seedStr){
   const rng=mulberry32(hashStr(seedStr));
   const SIZE=6000, islands=[], seeds=[];
@@ -193,7 +289,9 @@ const boat={x:0,y:0,vx:0,vy:0,h:0,
   boomSide:1, boomDraw:Math.PI, jibDraw:Math.PI, jibSide:1, butterfly:false,
   jibFurled:false, jibBack:false, spi:false, spiLimp:false, reef:0, stuck:0, spPrec:0, sbanda:0, gtime:0,
   wM:{opt:0,lo:0,hi:90*D2R,maxT:90*D2R}, wJ:{opt:0,lo:0,hi:80*D2R,maxT:80*D2R},
-  heel:0, luff:0, luffJ:0, aoa:0, aoaJ:0, balance:0, beta:0, grounded:0, wake:[]};
+  heel:0, luff:0, luffJ:0, aoa:0, aoaJ:0, balance:0, beta:0, grounded:0,
+  cx:0, cy:0,                                   // la corrente qui, m/s (0 senza meteo vivo)
+  wake:[]};
 const game={paused:false,auto:false,zoom:3.4,t:0,started:false,clock:0,next:0,done:null,
             msg:"",msgT:0, pilot:0, pilotTgt:0};
 
@@ -324,6 +422,7 @@ function semeNuovo(){
 function newWorld(seedStr){
   world=mapMode==="ionio"?ionianWorld():genWorld(seedStr);
   meteoSemina(seedStr);                 // stessa parola, stessa giornata di vento
+  world.corrente=buildCorrente(world.islands,world.size,seedStr);
   MARK_R=clamp(world.size/130,45,150);
   pianoAzzera(true);                    // altra carta, altri punti: la rotta vecchia non vuol dire niente
   fillPorts();
@@ -665,7 +764,21 @@ function physics(dt){
     if(boat.stuck>3 && game.msgT<=0)
       say(jibUp?"In panne — premi B: fiocco a collo per far cadere la prua":"In panne — issa il fiocco (F) e mettilo a collo (B)");
   } else boat.stuck=0;
-  boat.x+=boat.vx*dt; boat.y+=boat.vy*dt;
+  /* ─ velocità sull'acqua e velocità sul fondo ─
+     Questa è l'unica riga che la corrente tocca, e non è una scorciatoia:
+     è dove sta davvero la differenza. `boat.vx/vy` è la velocità **rispetto
+     all'acqua**, ed è la grandezza giusta ovunque venga usata sopra — il
+     vento apparente si calcola su di lei, le resistenze dello scafo pure
+     perché è l'acqua che frena, e la presa del timone anche, perché è
+     l'acqua che scorre sulla pala. Metterci dentro la corrente vorrebbe
+     dire contarla due volte, e la barca sentirebbe un vento che non c'è.
+     Quello che la corrente sposta è **dove finisci**: l'acqua intera si
+     muove, e con lei la barca. Da qui la scia che esce diversa dalla prua
+     molto più di quanto faccia lo scarroccio, e i due numeri distinti
+     sugli strumenti. */
+  const cu=correnteAt(boat.x,boat.y);
+  boat.cx=cu.x; boat.cy=cu.y;                 // per gli strumenti e la carta
+  boat.x+=(boat.vx+cu.x)*dt; boat.y+=(boat.vy+cu.y)*dt;
 
   // boma e fiocco sul lato sottovento (a farfalla, o a collo sopravvento)
   if(ab>4*D2R) boat.boomSide=sgn;
@@ -2002,7 +2115,8 @@ function drawHUD(){
   const hdg=(norm(boat.h)*R2D+360)%360;
 
   /* ── strumenti, in alto a sinistra */
-  const px=14,py=14,pw=196,ph=148;
+  // col mare vivo il riquadro cresce di una riga: quella sul fondo
+  const px=14,py=14,pw=196,ph=meteoDin?168:148;
   if(hud.strumenti){
   panel(px,py,pw,ph);
   label("VELOCITÀ",px+12,py+20);
@@ -2032,6 +2146,29 @@ function drawHUD(){
   ctx.font="12px ui-monospace,monospace";ctx.textAlign="right";
   ctx.fillText(oraHM()+(gg?"  g"+(gg+1):"")+"  "+fase,px+pw-12,py+140);
   ctx.textAlign="left";
+  /* ── sul fondo ──
+     La riga che rende visibile la corrente. Il numero grande là sopra è la
+     velocità **sull'acqua** — il solcometro, quello a cui rispondono le
+     vele e a cui è tarato il polare — e non cambia di un decimo perché
+     l'acqua si muove. Quella che cambia è dove finisci: qui sotto ci sono
+     i nodi fatti sul fondo e la rotta vera, cioè la scia. Quando la
+     corrente è di traverso i due numeri divergono, ed è esattamente il
+     momento in cui te ne devi accorgere.
+     Sono i due numeri che uno strumento vero tiene distinti, e finché il
+     mare stava fermo non c'era motivo di mostrarli entrambi. */
+  if(meteoDin){
+    const gx=boat.vx+boat.cx, gy=boat.vy+boat.cy;
+    const sog=Math.hypot(gx,gy)*1.94384;
+    const cog=(angOf(gx,gy)*R2D+360)%360;
+    const cor=Math.hypot(boat.cx,boat.cy)*1.94384;
+    ctx.fillStyle="rgba(243,234,212,.15)";ctx.fillRect(px+12,py+152,pw-24,1);
+    label("SUL FONDO",px+12,py+162);
+    // in evidenza quando la corrente conta davvero: mezzo nodo in su
+    ctx.fillStyle=cor>0.5?C("--accent"):C("--chart");
+    ctx.font="12px ui-monospace,monospace";ctx.textAlign="right";
+    ctx.fillText(sog.toFixed(1)+" kn  "+String(Math.round(cog)).padStart(3,"0")+"°",px+pw-12,py+162);
+    ctx.textAlign="left";
+  }
   }
 
   /* ── rosa dei venti, in alto a destra */
@@ -2642,8 +2779,8 @@ document.getElementById("wind").oninput=e=>{
 };
 document.getElementById("meteo").onchange=e=>{
   meteoDin=e.target.checked;
-  say(meteoDin?"Meteo vivo — il vento gira e rinforza con le ore, il cursore è la media della giornata"
-             :"Meteo fermo — il vento resta quello del cursore");
+  say(meteoDin?"Mare vivo — il vento gira con le ore e la marea porta la barca; il cursore è la media della giornata"
+             :"Mare fermo — vento costante e acqua immobile");
 };
 
 /* ══════════════════ rotta pianificata ══════════════════ */
@@ -3727,6 +3864,39 @@ function drawChart(){
     ctx.strokeStyle=CHART.shoal;ctx.lineWidth=is.hw*2.6;ctx.stroke();
     ctx.fillStyle=CHART.land;ctx.fill();
     ctx.strokeStyle=CHART.ink;ctx.lineWidth=1.4/chart.z;ctx.stroke();
+  }
+  /* Le correnti, disegnate sopra il mare e sotto tutto il resto: sono lo
+     sfondo su cui si pianifica, non un'informazione da leggere una per
+     una. Le frecce dicono **dove porta l'acqua** — convenzione opposta a
+     quella del vento, che si segna da dove viene — e la loro lunghezza
+     quanto porta. Il passo è in pixel di schermo e non in unità di carta,
+     così ingrandendo non si infittiscono: restano una griglia leggibile a
+     qualunque scala.
+     Sotto un decimo di nodo non si disegna niente: una freccia che non
+     vuol dire nulla è peggio del mare bianco. */
+  if(meteoDin&&world.corrente){
+    const passo=52/chart.z;                       // 52 px di schermo, sempre
+    ctx.lineWidth=1.1/chart.z;
+    const i0=Math.floor(v.x0/passo), i1=Math.ceil(v.x1/passo);
+    const j0=Math.floor(v.y0/passo), j1=Math.ceil(v.y1/passo);
+    for(let i=i0;i<=i1;i++)for(let j=j0;j<=j1;j++){
+      const x=i*passo, y=j*passo;
+      const c=correnteAt(x,y), m=Math.hypot(c.x,c.y);
+      if(m<0.05) continue;                        // meno di un decimo di nodo: niente
+      if(landDepth(world.islands,x,y)>-20) continue;
+      const L=(10+Math.min(m,1.0)*30)/chart.z, ux=c.x/m, uy=c.y/m;
+      const forte=m*1.94384>1;
+      ctx.strokeStyle=forte?"rgba(28,110,140,.75)":"rgba(28,110,140,.42)";
+      ctx.beginPath();
+      ctx.moveTo(x-ux*L/2,y-uy*L/2);ctx.lineTo(x+ux*L/2,y+uy*L/2);ctx.stroke();
+      // la punta, dalla parte in cui porta
+      const hx=x+ux*L/2, hy=y+uy*L/2, a=4.5/chart.z;
+      ctx.beginPath();
+      ctx.moveTo(hx,hy);
+      ctx.lineTo(hx-ux*a*2+uy*a,hy-uy*a*2-ux*a);
+      ctx.lineTo(hx-ux*a*2-uy*a,hy-uy*a*2+ux*a);
+      ctx.closePath();ctx.fillStyle=ctx.strokeStyle;ctx.fill();
+    }
   }
   // scia della traversata e fantasma
   if(voy&&voy.ghost){

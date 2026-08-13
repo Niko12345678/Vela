@@ -9,6 +9,52 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
 
 ## Non rilasciato
 
+### Aggiunto
+- **Le correnti di marea.** Col mare vivo l'acqua smette di stare ferma:
+  una marea scorre avanti e indietro con un ciclo di dodici ore e
+  ventiquattro, come quella vera. Al largo vale mezzo nodo scarso, ma nei
+  canali fra le isole stringe fino a un nodo e mezzo e scorre per il lungo
+  del passaggio.
+  Il campo si costruisce una volta per carta, e il conto dello
+  stringimento è la **continuità** — la ragione fisica per cui una
+  corrente accelera in un canale: la stessa acqua deve passare da meno
+  spazio. Per ogni punto si misura la larghezza del passaggio in quattro
+  direzioni e si tiene la più stretta; in mare aperto sono tutte larghe,
+  sottocosta la traversa è larga da un lato solo, in un canale è corta da
+  tutti e due. Si fa su una griglia booleana di terra invece che sui
+  poligoni, e l'intera carta del Ionio costa **8 ms**.
+- **Solcometro e velocità sul fondo diventano due numeri.** È il modo in
+  cui la corrente si vede: sopra resta la velocità sull'acqua — quella a
+  cui rispondono le vele e a cui è tarato il polare, e che non cambia di un
+  decimo perché l'acqua si muove — e sotto compaiono i nodi fatti davvero e
+  la rotta vera. Quando la corrente è di traverso i due divergono, ed è il
+  momento in cui te ne devi accorgere. Sulla carta, una griglia di frecce
+  che dice **dove porta l'acqua**: convenzione opposta a quella del vento,
+  che si segna da dove viene.
+
+### Cambiato
+- **La corrente entra in una riga sola, e non è una scorciatoia.**
+  `boat.vx/vy` è la velocità **rispetto all'acqua**, ed è la grandezza
+  giusta ovunque venga usata: il vento apparente si calcola su di lei, le
+  resistenze dello scafo pure perché è l'acqua che frena, e la presa del
+  timone anche perché è l'acqua che scorre sulla pala. Metterci dentro la
+  corrente vorrebbe dire contarla due volte, e la barca sentirebbe un vento
+  che non c'è. Quello che la corrente sposta è **dove finisci**, quindi
+  cambia solo l'integrazione della posizione.
+  È la ragione per cui `polarSolve` non si tocca e continua a valere: quel
+  conto vive nel riferimento dell'acqua e resta esatto. Un collaudo
+  verifica la separazione nel modo più severo — con corrente di traverso e
+  con corrente in poppa, a parità di velocità sull'acqua, il vento
+  apparente, l'angolo d'attacco, lo sbandamento e perfino l'accelerazione
+  devono venire **identici**, non simili.
+- La casella del menù diventa «Mare vivo (vento e correnti)»: era «Meteo
+  vivo» quando muoveva solo l'aria.
+- `test/correnti.test.js`: la corrente nulla a mare fermo, quella che porta
+  la barca senza farla andare più forte sull'acqua, la separazione dal
+  vento apparente, la marea che si inverte e torna, i canali che stringono
+  mentre a terra non scorre niente e il campo che si costruisce in fretta,
+  e la scia che esce dalla prua molto più dello scarroccio.
+
 ### Corretto
 - **Il pomeriggio non arriva più a raddoppiare il vento impostato.** Da un
   reclamo preciso: «sono partito con una virata che ero a 4 nodi e sono
