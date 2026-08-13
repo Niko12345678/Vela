@@ -3347,16 +3347,31 @@ function velocitaUtile(twa,spd){
    si spezzano: un solo campione a metà di sei miglia direbbe che l'ombra
    di un'isola non c'è, ed è proprio l'ombra che si sta cercando di
    evitare.                                                              */
-function consTempo(ax,ay,bx,by,passo){
+function consTempo(ax,ay,bx,by,passo,t0){
   const dx=bx-ax, dy=by-ay, d=Math.hypot(dx,dy);
   if(!(d>0))return 0;
   const ril=angOf(dx,dy), n=Math.max(1,Math.ceil(d/(passo||600)));
+  const ux=dx/d, uy=dy/d;
   let t=0;
   for(let i=0;i<n;i++){
-    const f=(i+0.5)/n;
-    const w=windAt(ax+dx*f,ay+dy*f);
+    const f=(i+0.5)/n, px=ax+dx*f, py=ay+dy*f;
+    const w=windAt(px,py);
     const v=velocitaUtile(norm(w.from-ril),w.spd);
-    t+=v>0.05?(d/n)/v:1e7;
+    /* La corrente entra qui, **a valle della polare** e non dentro: quel
+       conto vive nel riferimento dell'acqua e deve restare esatto, insieme
+       a tutte le sue memorie. Quello che cambia è la velocità sul fondo,
+       ed è il pezzo di corrente che va nella direzione della tratta —
+       quella di traverso ti sposta, ma non ti fa arrivare prima. Un
+       prodotto scalare per campione: la griglia ne chiede decine di
+       migliaia e non se ne accorge.
+       `t0` è quando ci arrivi, non adesso: glielo passa il Dijkstra dalla
+       sua stessa etichetta di costo, che è già un tempo. Così una rotta
+       lunga vede la marea che troverà là in fondo — e siccome la marea
+       gira ogni sei ore e una traversata può durarne tre, è la differenza
+       fra un consiglio e un indovinello. */
+    const cu=correnteAlT(px,py,game.t+(t0||0)+t);
+    const vg=v+(cu.x*ux+cu.y*uy);
+    t+=vg>0.05?(d/n)/vg:1e7;
   }
   return t;
 }
@@ -3470,7 +3485,7 @@ function consDijkstra(G,s,g){
       const w=vj*G.nx+vi;
       if(chiuso[w]||!G.nav[w])continue;
       if(!consSalto(G,ui,uj,vi,vj))continue;
-      const c=costo[u]+consTempo(ux,uy,G.wx(vi),G.wy(vj),G.passo);
+      const c=costo[u]+consTempo(ux,uy,G.wx(vi),G.wy(vj),G.passo,costo[u]);
       if(c<costo[w]){costo[w]=c;prima[w]=u;q.push(w,c);}
     }
   }
@@ -3509,7 +3524,7 @@ function consUnisci(pts,pre,passo,toll){
     let j=Math.min(pts.length-1,i+CONS_SGUARDO);
     for(;j>i+1;j--){
       if(!consMareLibero(pts[i],pts[j],i===0,j===pts.length-1))continue;
-      if(consTempo(pts[i].x,pts[i].y,pts[j].x,pts[j].y,passo)<=(pre[j]-pre[i])*toll)break;
+      if(consTempo(pts[i].x,pts[i].y,pts[j].x,pts[j].y,passo,pre[i])<=(pre[j]-pre[i])*toll)break;
     }
     out.push(j); i=j;
   }
@@ -3524,7 +3539,7 @@ function consScaletta(pts,passo,toll){
   for(let giro=0;giro<5&&cur.length>2;giro++){
     const pre=[0];
     for(let i=1;i<cur.length;i++)
-      pre.push(pre[i-1]+consTempo(cur[i-1].x,cur[i-1].y,cur[i].x,cur[i].y,passo));
+      pre.push(pre[i-1]+consTempo(cur[i-1].x,cur[i-1].y,cur[i].x,cur[i].y,passo,pre[i-1]));
     const idx=consUnisci(cur,pre,passo,toll);
     if(idx.length===cur.length)break;
     cur=idx.map(k=>cur[k]);
@@ -3714,7 +3729,9 @@ function consRifinisci(G,r,ax,ay,bx,by){
   for(const p of punti){
     const w=windAt((px+p.x)/2,(py+p.y)/2);
     const b=bordiPer(px,py,p.x,p.y,w.from,w.spd);
-    const t=consTempo(px,py,p.x,p.y,G.passo);
+    // `out.t` è quanto si è già navigato: è l'ora in cui si affronta questa
+    // tratta, e quindi la marea che ci si trova
+    const t=consTempo(px,py,p.x,p.y,G.passo,out.t);
     const d=Math.hypot(p.x-px,p.y-py);
     // Una tratta è tenibile se sta fuori dalla zona morta. La tolleranza è
     // larga di proposito: il vento cambia lungo la tratta e con lui

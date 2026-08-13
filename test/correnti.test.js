@@ -256,3 +256,72 @@ test("la stanca annunciata dalla carta è quella che poi arriva", async () => {
       "e non più lontana di mezzo ciclo di marea");
   }
 });
+
+test("il consiglio di rotta conta la corrente, ma solo quella che porta a destinazione", async () => {
+  const r = await runInGame(MONDO + UNIFORME + `
+    meteoDin = true; oraPartenza = 0;
+    game.t = (CORR_MAREA/4)/24*GIORNO;          // marea al culmine
+    windBase = 7; windDirBase = 90*D2R;         // vento da Est: la tratta verso Est è di bolina
+    const A = {x:0,y:0}, B = {x:3000,y:0};      // tratta verso Est
+    const tempo = (ux,uy) => { correnteFinta(ux,uy); return consTempo(A.x,A.y,B.x,B.y,600,0); };
+    const ferma = tempo(0,0);
+    const favore = tempo(1,0);                  // porta verso Est: aiuta
+    const contro  = tempo(-1,0);                // porta verso Ovest: ostacola
+    const traverso = tempo(0,1);                // porta verso Sud: sposta, non aiuta
+    report({ ferma, favore, contro, traverso });
+  `);
+  assert.ok(r.favore < r.ferma*0.98,
+    `con la corrente a favore la tratta deve costare meno: ${r.ferma.toFixed(0)} -> ${r.favore.toFixed(0)} s`);
+  assert.ok(r.contro > r.ferma*1.02,
+    `e con quella contraria di più: ${r.ferma.toFixed(0)} -> ${r.contro.toFixed(0)} s`);
+  assert.ok(Math.abs(r.traverso - r.ferma) < r.ferma*0.01,
+    `ma quella di traverso non deve cambiare il tempo: ti sposta, non ti fa arrivare prima (${r.ferma.toFixed(0)} -> ${r.traverso.toFixed(0)} s)`);
+});
+
+test("il consiglio guarda la marea che troverà là, non quella di adesso", async () => {
+  /* La ragione per cui il Dijkstra passa a `consTempo` la propria etichetta
+     di costo, che è già un tempo di arrivo: la marea gira ogni sei ore e
+     una traversata può durarne tre. Chiedere il tempo di una tratta «fra
+     sei ore» deve dare un risultato diverso dal chiederlo per adesso. */
+  const r = await runInGame(MONDO + UNIFORME + `
+    meteoDin = true; oraPartenza = 0;
+    game.t = (CORR_MAREA/4)/24*GIORNO;
+    windBase = 7; windDirBase = 90*D2R;
+    correnteFinta(1,0);
+    const mezzoCiclo = (CORR_MAREA/2)*3600/SCALE_GEO;   // in secondi di cronometro
+    report({ adesso: consTempo(0,0,3000,0,600,0),
+             fraMezzoCiclo: consTempo(0,0,3000,0,600,mezzoCiclo),
+             fraUnCiclo: consTempo(0,0,3000,0,600,mezzoCiclo*2) });
+  `);
+  assert.ok(r.fraMezzoCiclo > r.adesso*1.02,
+    `a marea girata la stessa tratta deve costare di più: ${r.adesso.toFixed(0)} -> ${r.fraMezzoCiclo.toFixed(0)} s`);
+  assert.ok(Math.abs(r.fraUnCiclo - r.adesso) < r.adesso*0.02,
+    `e dopo un ciclo intero tornare com'era: ${r.adesso.toFixed(0)} -> ${r.fraUnCiclo.toFixed(0)} s`);
+});
+
+test("a mare fermo il consiglio è esattamente quello di prima", async () => {
+  /* La garanzia che tiene verdi i dodici collaudi del consiglio: con la
+     corrente spenta il tempo di una tratta è quello della sola polare, e
+     il parametro del tempo d'arrivo non cambia niente. */
+  const r = await runInGame(MONDO + UNIFORME + `
+    meteoDin = false;
+    correnteFinta(1,0);
+    windBase = 7; windDirBase = 90*D2R;
+    const a = consTempo(0,0,3000,0,600,0);
+    const b = consTempo(0,0,3000,0,600,99999);
+    // e il conto a mano: la sola velocità utile, senza corrente
+    const ril = angOf(3000,0);
+    let atteso = 0;
+    const n = Math.max(1,Math.ceil(3000/600));
+    for (let i=0;i<n;i++){
+      const w = windAt(3000*(i+0.5)/n, 0);
+      const v = velocitaUtile(norm(w.from-ril), w.spd);
+      atteso += v>0.05 ? (3000/n)/v : 1e7;
+    }
+    report({ a, b, atteso });
+  `);
+  assert.equal(r.a, r.atteso,
+    "a mare fermo il tempo di una tratta è quello della sola polare, cifra per cifra");
+  assert.equal(r.a, r.b,
+    "e l'ora in cui ci si arriva non cambia niente, perché non c'è marea da girare");
+});

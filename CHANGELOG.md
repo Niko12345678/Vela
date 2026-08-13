@@ -10,6 +10,39 @@ Quando questo file supera le 50 righe, sposta le voci più vecchie in
 ## Non rilasciato
 
 ### Aggiunto
+- **La rotta consigliata tiene conto della marea, e non di quella di
+  adesso.** Finora il consiglio calcolava i tempi sulla sola polare, che
+  vive nel riferimento dell'acqua: con una marea contraria prometteva una
+  traversata che non si poteva fare in quel tempo. Ora la corrente entra
+  nel costo di ogni tratta — **a valle della polare e non dentro**, perché
+  quel conto e tutte le sue memorie devono restare esatti: un prodotto
+  scalare per campione, e solo la parte di corrente che va nella direzione
+  della tratta, perché quella di traverso ti sposta ma non ti fa arrivare
+  prima.
+  La parte che vale la pena raccontare è **quale** marea guarda. Il
+  Dijkstra ha già, in ogni nodo, l'etichetta di costo — che è un tempo di
+  arrivo — e gliela passa: così ogni tratta viene valutata con la corrente
+  che ci si troverà davvero, non con quella di partenza. Siccome la marea
+  gira ogni sei ore e una traversata del Ionio ne dura tre, è la differenza
+  fra un consiglio e un indovinello. Misurato su Preveza-Fiskardo: fra due
+  maree opposte il tempo consigliato cambia del 10 %, e la rotta guadagna
+  punti per stare fuori dalla corrente contraria.
+  A mare fermo il conto è **identico cifra per cifra** a quello di prima —
+  verificato riscrivendo a mano la formula della sola polare nel collaudo —
+  ed è la ragione per cui i dodici collaudi del consiglio non si sono
+  mossi.
+- **I bordi restano un conto sull'acqua**, di proposito: dicono da che
+  parte virare, che è una domanda a cui la corrente non cambia risposta.
+  Correggere anche la geometria delle mure vorrebbe dire risolvere i bordi
+  sul fondo, che è un'altra costruzione; il tempo per arrivare lo dà la
+  rotta consigliata, ed è lì che la marea conta.
+- `test/correnti.test.js` guadagna tre prove: la corrente che accorcia la
+  tratta a favore, la allunga contro e non la tocca di traverso; la stessa
+  tratta chiesta per fra sei ore che costa diversamente da adesso e torna
+  uguale dopo un ciclo intero; e il conto a mare fermo identico alla sola
+  polare.
+
+### Aggiunto
 - **La carta nautica dice anche la marea, non solo il vento.** Le frecce
   sul mare raccontavano la corrente di *adesso*, ma chi pianifica una
   traversata non chiede com'è: chiede **quando gira**. Tre aggiunte, tutte
